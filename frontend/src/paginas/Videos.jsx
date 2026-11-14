@@ -1,21 +1,59 @@
-import { FilmStrip, Plus } from "@phosphor-icons/react";
+import { FilmStrip, MapPin, Plus } from "@phosphor-icons/react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { api } from "../api.js";
+import { haceCuanto } from "../constantes.js";
+import { Fuente, Urgencia } from "../componentes/Insignias.jsx";
+import { IconoCategoria } from "../iconos.jsx";
 
 export default function Videos() {
+  const [datos, setDatos] = useState(null);
+  const [error, setError] = useState("");
+  useEffect(() => { api("/videos?limite=30").then(setDatos).catch((e) => setError(e.message)); }, []);
+
   return (
-    <div className="pagina estrecha">
-      <div className="pagina-cabecera">
-        <h1>Videos de lo que pasa ahora</h1>
-        <p>Clips cortos que los vecinos graban y adjuntan a sus reportes: un arroyo crecido, un incendio en los cerros, una vía cerrada.</p>
-      </div>
-      <div className="caja estado-vacio">
+    <div className="pagina">
+      <div className="pagina-cabecera lista-cabecera" style={{ padding: 0, alignItems: "flex-end" }}>
         <div>
-          <div className="icono-grande"><FilmStrip size={32} weight="bold" /></div>
-          <h2>Todavía no hay videos</h2>
-          <p>Los videos llegarán con la próxima versión, cuando los reportes permitan adjuntar fotos y clips. Mientras tanto, puedes reportar lo que ves.</p>
-          <Link to="/reportar" className="boton reportar"><Plus size={18} weight="bold" />Reportar algo</Link>
+          <h1>Videos de lo que pasa ahora</h1>
+          <p>Clips que los vecinos graban y adjuntan a sus reportes: un arroyo crecido, un incendio en los cerros, una vía cerrada.</p>
         </div>
+        {datos && <Fuente fuente={datos._fuente} />}
       </div>
+      {error && <p className="error">{error}</p>}
+      {!datos && !error && (
+        <div className="videos-grid">{[0, 1, 2].map((i) => <div key={i} className="esqueleto" style={{ aspectRatio: "16 / 10" }} />)}</div>
+      )}
+      {datos?.total === 0 && (
+        <div className="caja estado-vacio">
+          <div>
+            <div className="icono-grande"><FilmStrip size={32} weight="bold" /></div>
+            <h2>Todavía no hay videos</h2>
+            <p>Cuando alguien adjunte un video a su reporte, aparecerá aquí. Puedes ser el primero.</p>
+            <Link to="/reportar" className="boton reportar"><Plus size={18} weight="bold" />Reportar con video</Link>
+          </div>
+        </div>
+      )}
+      {datos?.total > 0 && (
+        <div className="videos-grid">
+          {datos.videos.map((v) => (
+            <article key={v.id} className="video-tarjeta">
+              <video src={v.url} controls playsInline preload="metadata" aria-label={`Video: ${v.subtipo_nombre} en ${v.barrio}`} />
+              <div className="video-info">
+                <span className={`tarjeta-icono u${v.urgencia}`}><IconoCategoria categoria={v.categoria} size={20} /></span>
+                <div>
+                  <h2>{v.subtipo_nombre}</h2>
+                  <p className="nota">{v.barrio}, {haceCuanto(v.creado_en)}</p>
+                </div>
+              </div>
+              <div className="video-pie">
+                <Urgencia nivel={v.urgencia} />
+                <Link to={`/mapa?r=${v.rid}`} className="enlace"><MapPin size={16} weight="bold" />Ver en el mapa</Link>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

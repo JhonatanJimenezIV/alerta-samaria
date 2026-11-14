@@ -5,6 +5,7 @@ import { api } from "../api.js";
 import { ESTADOS, NOMBRES_CATEGORIA, haceCuanto } from "../constantes.js";
 import { IconoCategoria } from "../iconos.jsx";
 import { useSesion } from "../sesion.jsx";
+import Galeria from "./Galeria.jsx";
 import { Estado, Fuente, Urgencia } from "./Insignias.jsx";
 
 export function Historial({ eventos }) {
@@ -85,6 +86,7 @@ export default function DetalleReporte({ id, onCerrar, onCambio }) {
             <div className="aviso-123"><Phone size={18} weight="bold" />Si hay riesgo para la vida, llama al 123</div>
           )}
           {r.descripcion && <p className="detalle-desc">{r.descripcion}</p>}
+          <Galeria media={r.media} />
           <dl className="detalle-datos">
             <dt>Barrio</dt><dd>{r.barrio}{r.comuna && `, ${r.comuna}`}</dd>
             {r.direccion && (<><dt>Dirección</dt><dd>{r.direccion}</dd></>)}

@@ -15,7 +15,7 @@ from urllib.parse import unquote
 
 from boto3.dynamodb.conditions import Key
 
-from comun import cache, db, estados, modelo
+from comun import cache, db, estados, media, modelo
 from comun.http import ErrorApi, despachar, cuerpo_json, query, respuesta, usuario_actual
 
 logger = logging.getLogger()
@@ -72,7 +72,7 @@ def detalle(event: dict[str, Any]) -> dict[str, Any]:
         _verificar_categoria(ent, en_cache["categoria"])
         return respuesta(200, {**en_cache, "_fuente": "cache"})
 
-    meta, eventos = db.obtener_reporte_completo(rid)
+    meta, eventos, medias = db.obtener_reporte_completo(rid)
     if not meta:
         raise ErrorApi(404, f"Reporte '{rid}' no encontrado")
     _verificar_categoria(ent, meta["categoria"])
@@ -80,7 +80,8 @@ def detalle(event: dict[str, Any]) -> dict[str, Any]:
     if meta.get("contacto_autorizado"):
         autor = db.obtener_usuario(meta["autor_id"]) or {}
         contacto = {"nombre": autor.get("nombre"), "telefono": autor.get("telefono"), "email": autor.get("email")}
-    datos = {**modelo.entidad(meta, contacto), "historial": [modelo.evento(e) for e in eventos]}
+    datos = {**modelo.entidad(meta, contacto), "historial": [modelo.evento(e) for e in eventos],
+             "media": [media.publico(m) for m in medias]}
     cache.set_json(cache.k_full(rid), datos, cache.TTL_ENTIDAD)
     return respuesta(200, {**datos, "_fuente": "dynamodb"})
 

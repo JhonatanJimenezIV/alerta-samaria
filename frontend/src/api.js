@@ -41,3 +41,25 @@ export const qs = (params) => {
   const p = Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== "");
   return p.length ? "?" + new URLSearchParams(p).toString() : "";
 };
+
+// Sube un archivo directo a S3 con la URL prefirmada que entrega el API (PUT).
+// Se usa XMLHttpRequest porque fetch no informa el progreso de subida.
+export function subirArchivo(url, archivo, contentType, alProgresar) {
+  return new Promise((resolver, rechazar) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    xhr.setRequestHeader("Content-Type", contentType);
+    xhr.upload.onprogress = (e) => e.lengthComputable && alProgresar?.(Math.round((e.loaded / e.total) * 100));
+    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolver() : rechazar(new ErrorApi(xhr.status, `S3 respondió ${xhr.status} al subir ${archivo.name}`)));
+    xhr.onerror = () => rechazar(new ErrorApi(0, `No se pudo subir ${archivo.name}. Revisa que el emulador esté corriendo`));
+    xhr.send(archivo);
+  });
+}
+
+// Flujo completo de un adjunto: pedir URL → subir a S3 → confirmar
+export async function adjuntarArchivo(reporteId, archivo, alProgresar) {
+  const contentType = archivo.type || "application/octet-stream";
+  const pedido = await api(`/reportes/${reporteId}/media`, { metodo: "POST", body: { content_type: contentType, tamano: archivo.size } });
+  await subirArchivo(pedido.url_subida, archivo, contentType, alProgresar);
+  return api(`/reportes/${reporteId}/media/${pedido.id}/confirmar`, { metodo: "POST", body: {} });
+}

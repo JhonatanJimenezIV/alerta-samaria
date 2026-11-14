@@ -9,6 +9,7 @@ Proyecto final de **Bases de Datos NoSQL** (DynamoDB + Redis), construido sobre 
 |---|---|
 | Base de datos (fuente de verdad) | DynamoDB, **tabla única** con PK/SK, 4 GSI y TTL |
 | Caché / tiempo real | Redis 7: feed (Sorted Set), cercanía (GEO), ranking, rate limiting, Cache-Aside |
+| Fotos y videos | S3 (emulado): el navegador sube directo con URLs prefirmadas; DynamoDB guarda la referencia |
 | Backend | 4 Lambdas Python 3.11 detrás de API Gateway |
 | Infraestructura | AWS CDK (Python) + `cdklocal` sobre LocalStack 4.14 o MiniStack |
 | Entorno | Docker Compose: `emulador` + `redis` + `cdk-dev` |
@@ -73,6 +74,9 @@ Autenticación simplificada: el header `X-Usuario-Id` identifica al usuario
 | PATCH | `/entidad/reportes/{id}/estado` | AP15 | entidad |
 | GET | `/entidad/estadisticas?fecha=AAAA-MM-DD` | AP16 | entidad |
 | GET | `/entidad/riesgo/{barrio}?desde=&hasta=` | AP17 | entidad |
+| POST | `/reportes/{id}/media` | AP21 | autor del reporte |
+| POST | `/reportes/{id}/media/{mid}/confirmar` | AP22 | autor del reporte |
+| GET | `/videos` | AP23 | — |
 
 Las respuestas de lectura incluyen `"_fuente": "cache"` o `"dynamodb"` para evidenciar el caché.
 
@@ -116,7 +120,7 @@ alerta-samaria/
     │   ├── health.py
     │   └── comun/            # db, cache (Redis), catálogo, modelo (privacidad), estados, http
     ├── scripts/              # deploy.sh, post_deploy.py, seed.py
-    └── tests/                # pytest + moto + fakeredis (24 tests)
+    └── tests/                # pytest + moto + fakeredis (28 tests)
 ```
 
 ## Decisiones clave (resumen para la sustentación)
@@ -131,5 +135,8 @@ alerta-samaria/
   estado + evento.
 - **Modo degradado**: si Redis cae, el feed y la cercanía se sirven desde GSI4.
 - **TTL**: un reporte que nadie confirma en 48 h se elimina solo.
+- **Fotos y videos sin pasar por la Lambda**: URL prefirmada de S3 → subida directa → confirmación
+  (HeadObject). El ítem `MEDIA#` vive en la partición del reporte y los videos sobrecargan el GSI4
+  (`MEDIA#<fecha>`) como respaldo del feed de `/videos` en Redis. En Seguridad no se permiten adjuntos.
 - **Privacidad por niveles** (Ley 1581 de 2012): en Seguridad la ubicación pública es aproximada
   (~150 m) y nunca se publican datos del reportante.

@@ -9,6 +9,9 @@ Lambda reportes — endpoints públicos (sin cuenta) y del ciudadano.
     GET  /categorias                     AP6  catálogo                Cache-Aside cfg:categorias
     POST /reportes                       AP9  crear reporte           DynamoDB + Write-Through
     POST /reportes/{id}/confirmaciones   AP10 confirmar               TransactWriteItems + Redis
+    POST /reportes/{id}/media            AP21 pedir URL de subida     URL prefirmada de S3 + ítem MEDIA#
+    POST /reportes/{id}/media/{mid}/confirmar  AP22 confirmar subida  HeadObject + Write-Through a media:videos
+    GET  /videos                         AP23 videos recientes        Redis ZSET (respaldo GSI4 MEDIA#<fecha>)
 """
 import logging
 import os
@@ -17,11 +20,13 @@ from decimal import Decimal
 from typing import Any
 from urllib.parse import unquote
 
+import json
+
 import redis
 from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
-from comun import cache, catalogo, db, estados, modelo
+from comun import cache, catalogo, db, estados, media, modelo
 from comun.http import ErrorApi, despachar, cuerpo_json, ip_origen, query, respuesta, usuario_actual
 
 logger = logging.getLogger()
@@ -151,10 +156,11 @@ def detalle(event: dict[str, Any]) -> dict[str, Any]:
             en_cache["confirmaciones"] = conteo
         return respuesta(200, {**en_cache, "_fuente": "cache"})
 
-    meta, eventos = db.obtener_reporte_completo(rid)
+    meta, eventos, medias = db.obtener_reporte_completo(rid)
     if not meta:
         raise ErrorApi(404, f"Reporte '{rid}' no encontrado")
-    datos = {**modelo.publico(meta), "historial": [modelo.evento(e) for e in eventos]}
+    datos = {**modelo.publico(meta), "historial": [modelo.evento(e) for e in eventos],
+             "media": [media.publico(m) for m in medias]}
     cache.set_json(cache.k_pub(rid), datos, cache.TTL_PUBLICO)
     return respuesta(200, {**datos, "_fuente": "dynamodb"})
 
@@ -358,6 +364,153 @@ def confirmar(event: dict[str, Any]) -> dict[str, Any]:
     return respuesta(201, {"id": rid, "confirmaciones": total, "estado": meta["estado"]})
 
 
+# ── AP21 ─────────────────────────────────────────────────────────────
+
+def _reporte_propio(event: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    usuario = usuario_actual(event)
+    rid = event["pathParameters"]["id"]
+    meta = db.obtener_reporte(rid)
+    if not meta:
+        raise ErrorApi(404, f"Reporte '{rid}' no encontrado")
+    if meta["autor_id"] != usuario["id"]:
+        raise ErrorApi(403, "Solo quien creó el reporte puede adjuntar fotos o videos")
+    return usuario, meta
+
+
+def pedir_subida(event: dict[str, Any]) -> dict[str, Any]:
+    _, meta = _reporte_propio(event)
+    datos = cuerpo_json(event)
+    content_type = str(datos.get("content_type", "")).lower()
+    if content_type not in media.TIPOS:
+        raise ErrorApi(400, "Formato no permitido. Usa JPG, PNG o WEBP para fotos y MP4, WEBM o MOV para videos")
+    clase, ext = media.TIPOS[content_type]
+    try:
+        tamano = int(datos.get("tamano", 0))
+    except (TypeError, ValueError):
+        raise ErrorApi(400, "El campo 'tamano' debe ser numérico (bytes)")
+    if tamano <= 0 or tamano > media.LIMITE_BYTES[clase]:
+        raise ErrorApi(400, f"El {clase} supera el máximo de {media.LIMITE_BYTES[clase] // (1024 * 1024)} MB")
+    if meta["categoria"] == "seguridad":
+        # Privacidad: evita rostros, placas y señalamientos de personas
+        raise ErrorApi(400, "En Seguridad no se permiten fotos ni videos, para proteger a las personas involucradas")
+    rid = meta["id"]
+    existentes = db.tabla().query(
+        KeyConditionExpression=Key("PK").eq(f"REP#{rid}") & Key("SK").begins_with("MEDIA#"), Select="COUNT")["Count"]
+    if existentes >= media.MAX_POR_REPORTE:
+        raise ErrorApi(409, f"Un reporte admite máximo {media.MAX_POR_REPORTE} fotos o videos")
+
+    mid = db.ulid()
+    clave = f"reportes/{rid}/{mid}.{ext}"
+    db.tabla().put_item(Item={
+        "PK": f"REP#{rid}", "SK": f"MEDIA#{mid}", "tipo": "MEDIA", "mid": mid, "rid": rid,
+        "clase": clase, "content_type": content_type, "clave": clave, "tamano_declarado": tamano,
+        "estado": "subiendo", "creado_en": db.iso(db.ahora()),
+    })
+    return respuesta(201, {"id": mid, "clase": clase, "metodo": "PUT", "url_subida": media.url_subida(clave, content_type),
+                           "headers": {"Content-Type": content_type}, "expira_en_seg": media.EXPIRA_SUBIDA})
+
+
+# ── AP22 ─────────────────────────────────────────────────────────────
+
+def confirmar_subida(event: dict[str, Any]) -> dict[str, Any]:
+    _, meta = _reporte_propio(event)
+    rid, mid = meta["id"], event["pathParameters"]["mid"]
+    item = db.tabla().get_item(Key={"PK": f"REP#{rid}", "SK": f"MEDIA#{mid}"}).get("Item")
+    if not item:
+        raise ErrorApi(404, "Archivo no encontrado")
+    if item["estado"] == "listo":
+        return respuesta(200, media.publico(item))
+    tamano = media.tamano_subido(item["clave"])
+    if tamano is None:
+        raise ErrorApi(409, "El archivo todavía no está en S3. Súbelo con la URL prefirmada y vuelve a confirmar")
+    if tamano > media.LIMITE_BYTES[item["clase"]]:
+        raise ErrorApi(400, "El archivo subido supera el tamaño permitido")
+
+    momento = db.ahora()
+    creado = db.iso(momento)
+    expr = "SET estado = :listo, tamano = :t"
+    valores: dict[str, Any] = {":listo": "listo", ":t": tamano, ":subiendo": "subiendo"}
+    if item["clase"] == "video":
+        # Sobrecarga del GSI4: el mismo índice que guarda el feed por día guarda los videos por día
+        expr += ", GSI4PK = :g, GSI4SK = :gs"
+        valores.update({":g": f"MEDIA#{momento.strftime('%Y-%m-%d')}", ":gs": f"{creado}#{mid}"})
+    db.tabla().update_item(Key={"PK": f"REP#{rid}", "SK": f"MEDIA#{mid}"}, UpdateExpression=expr,
+                           ConditionExpression="estado = :subiendo", ExpressionAttributeValues=valores)
+    meta_expr = "ADD media_count :uno" + (" SET tiene_video = :v" if item["clase"] == "video" else "")
+    meta_vals: dict[str, Any] = {":uno": 1}
+    if item["clase"] == "video":
+        meta_vals[":v"] = True
+    db.tabla().update_item(Key={"PK": f"REP#{rid}", "SK": "META"}, UpdateExpression=meta_expr,
+                           ExpressionAttributeValues=meta_vals)
+
+    # Invalidación + Write-Through del feed de videos
+    cache.borrar(cache.k_pub(rid), cache.k_full(rid))
+    if item["clase"] == "video":
+        resumen = _resumen_video({**item, "estado": "listo"}, meta)
+        try:
+            pipe = cache.cliente().pipeline()
+            pipe.zadd("media:videos", {f"{rid}|{mid}": db.epoch(momento)})
+            pipe.set(f"media:{mid}", json.dumps(resumen, default=str), ex=3600)
+            pipe.execute()
+        except redis.RedisError:
+            pass
+    return respuesta(200, media.publico({**item, "estado": "listo"}))
+
+
+# ── AP23 ─────────────────────────────────────────────────────────────
+
+def _resumen_video(item: dict[str, Any], meta: dict[str, Any]) -> dict[str, Any]:
+    m = db.desde_dynamo(meta)
+    return {"id": item["mid"], "rid": item["rid"], "clave": item["clave"], "content_type": item["content_type"],
+            "creado_en": item["creado_en"], "categoria": m["categoria"], "subtipo_nombre": m.get("subtipo_nombre"),
+            "barrio": m["barrio"], "urgencia": m["urgencia"], "estado": m["estado"]}
+
+
+def _videos_desde_dynamo(limite: int) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    hoy = db.ahora()
+    for dias in range(7):
+        dia = (hoy - timedelta(days=dias)).strftime("%Y-%m-%d")
+        r = db.tabla().query(IndexName="GSI4", KeyConditionExpression=Key("GSI4PK").eq(f"MEDIA#{dia}"),
+                             ScanIndexForward=False, Limit=limite)
+        items.extend(r.get("Items", []))
+        if len(items) >= limite:
+            break
+    metas = db.obtener_reportes_lote(list({i["rid"] for i in items[:limite]}))
+    return [_resumen_video(i, metas[i["rid"]]) for i in items[:limite] if i["rid"] in metas]
+
+
+def videos(event: dict[str, Any]) -> dict[str, Any]:
+    _limitar_lectura(event)
+    limite = _entero(query(event).get("limite"), 24, 1, 60)
+    try:
+        miembros = cache.cliente().zrevrange("media:videos", 0, limite - 1)
+        en_cache = cache.mget_json([f"media:{m.split('|')[1]}" for m in miembros]) or []
+        lista, faltan = [], []
+        for miembro, valor in zip(miembros, en_cache):
+            if valor:
+                lista.append(valor)
+            else:
+                faltan.append(miembro)
+        if faltan:  # el JSON expiró: se reconstruye desde DynamoDB
+            for miembro in faltan:
+                rid, mid = miembro.split("|")
+                item = db.tabla().get_item(Key={"PK": f"REP#{rid}", "SK": f"MEDIA#{mid}"}).get("Item")
+                meta = db.obtener_reporte(rid)
+                if item and meta:
+                    resumen = _resumen_video(item, meta)
+                    cache.set_json(f"media:{mid}", resumen, 3600)
+                    lista.append(resumen)
+            lista.sort(key=lambda v: v["creado_en"], reverse=True)
+        fuente = "cache"
+    except redis.RedisError:
+        lista = _videos_desde_dynamo(limite)
+        fuente = "dynamodb"
+    for v in lista:
+        v["url"] = media.url_lectura(v.pop("clave"))
+    return respuesta(200, {"videos": lista, "total": len(lista), "_fuente": fuente})
+
+
 RUTAS = {
     ("GET", "/reportes/feed"): feed,
     ("GET", "/reportes/cerca"): cerca,
@@ -367,6 +520,9 @@ RUTAS = {
     ("GET", "/categorias"): categorias,
     ("POST", "/reportes"): crear,
     ("POST", "/reportes/{id}/confirmaciones"): confirmar,
+    ("POST", "/reportes/{id}/media"): pedir_subida,
+    ("POST", "/reportes/{id}/media/{mid}/confirmar"): confirmar_subida,
+    ("GET", "/videos"): videos,
 }
 
 

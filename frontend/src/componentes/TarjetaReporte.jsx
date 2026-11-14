@@ -1,4 +1,4 @@
-import { UsersThree } from "@phosphor-icons/react";
+import { Camera, UsersThree, VideoCamera } from "@phosphor-icons/react";
 import { haceCuanto } from "../constantes.js";
 import { IconoCategoria } from "../iconos.jsx";
 import { Estado, Urgencia } from "./Insignias.jsx";
@@ -20,6 +20,7 @@ export default function TarjetaReporte({ reporte: r, onClick, seleccionado, extr
           <Urgencia nivel={r.urgencia} />
           <Estado estado={r.estado} />
           {r.confirmaciones > 0 && <span className="confirmaciones"><UsersThree size={14} weight="bold" />{r.confirmaciones}</span>}
+          {r.media_count > 0 && <span className="confirmaciones" title={r.tiene_video ? "Tiene video" : "Tiene fotos"}>{r.tiene_video ? <VideoCamera size={14} weight="bold" /> : <Camera size={14} weight="bold" />}{r.media_count}</span>}
           {extra}
         </span>
       </span>

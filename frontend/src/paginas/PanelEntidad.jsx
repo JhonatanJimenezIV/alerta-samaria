@@ -6,6 +6,7 @@ import { Buildings, ChartBar, CheckCircle, Lightbulb, Siren, Wrench } from "@pho
 import { BARRIOS, ESTADOS, haceCuanto } from "../constantes.js";
 import { IconoCategoria } from "../iconos.jsx";
 import { Historial } from "../componentes/DetalleReporte.jsx";
+import Galeria from "../componentes/Galeria.jsx";
 import { CAPA_MAPA } from "../componentes/MapaReportes.jsx";
 import { Estado, Fuente, Urgencia } from "../componentes/Insignias.jsx";
 import { iconoReporte } from "../componentes/MapaReportes.jsx";
@@ -53,6 +54,7 @@ function DetalleEntidad({ id, onCambio }) {
         {r.confianza_reporte === "baja" && <span className="insignia u1">Confianza baja</span>}
       </div>
       {r.descripcion && <p className="detalle-desc">{r.descripcion}</p>}
+      <Galeria media={r.media} />
       <dl className="detalle-datos">
         <dt>Dirección</dt><dd>{r.direccion || "—"}</dd>
         <dt>Referencia</dt><dd>{r.referencia || "—"}</dd>

@@ -9,6 +9,7 @@ Infraestructura serverless de Alerta Samaria:
     usuarios  → registro, perfil y "mis reportes"
     entidad   → panel de entidades (pendientes, estado, estadísticas, riesgo)
     health    → verificación de DynamoDB y Redis
+- Bucket S3 para fotos y videos (subida directa con URLs prefirmadas)
 - API Gateway (REST) con CORS para el frontend en React
 
 Basado en el stack del proyecto base del curso (gitlab.com/caov_unimag/bd_no_sql).
@@ -26,6 +27,7 @@ from aws_cdk import (
     aws_dynamodb as ddb,
     aws_lambda as _lambda,
     aws_apigateway as apigw,
+    aws_s3 as s3,
     RemovalPolicy,
     CfnOutput,
 )
@@ -111,6 +113,18 @@ class AlertaSamariaStack(Stack):
                 projection_type=ddb.ProjectionType.ALL,
             )
 
+        # ── 1b. BUCKET DE FOTOS Y VIDEOS ───────────────────────────────
+        # El navegador sube directo a S3 con URLs prefirmadas: el archivo no pasa por la Lambda.
+        bucket_media = s3.Bucket(
+            self, "MediaBucket",
+            removal_policy=RemovalPolicy.DESTROY,
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            cors=[s3.CorsRule(
+                allowed_methods=[s3.HttpMethods.PUT, s3.HttpMethods.GET, s3.HttpMethods.HEAD],
+                allowed_origins=["*"], allowed_headers=["*"], max_age=3000,
+            )],
+        )
+
         # ── 2. LAYER (solo en AWS real) ────────────────────────────────
         layers: list[_lambda.ILayerVersion] = []
         if not ES_LOCAL:
@@ -135,7 +149,11 @@ class AlertaSamariaStack(Stack):
             "RATE_REPORTES_HORA": "5",
             "RATE_LECTURAS_MINUTO": "120",
             "CONFIRMACIONES_REQUERIDAS": "3",
+            "MEDIA_BUCKET": bucket_media.bucket_name,
         }
+        if ES_LOCAL:
+            # Las URLs prefirmadas las usa el navegador, que llega al emulador por localhost:4566
+            env_comun["PUBLIC_S3_ENDPOINT"] = "http://localhost:4566"
         codigo = _codigo_lambdas()
 
         def funcion(nombre: str, handler: str, timeout: int = 10) -> _lambda.Function:
@@ -155,6 +173,8 @@ class AlertaSamariaStack(Stack):
         tabla.grant_read_write_data(fn_usuarios)
         tabla.grant_read_write_data(fn_entidad)
         tabla.grant_read_data(fn_health)
+        bucket_media.grant_read_write(fn_reportes)
+        bucket_media.grant_read(fn_entidad)
 
         # ── 3. API GATEWAY ─────────────────────────────────────────────
         api = apigw.RestApi(
@@ -180,6 +200,10 @@ class AlertaSamariaStack(Stack):
         reporte = reportes.add_resource("{id}")
         reporte.add_method("GET", i_rep)                                      # AP3 + AP12
         reporte.add_resource("confirmaciones").add_method("POST", i_rep)      # AP10
+        rep_media = reporte.add_resource("media")
+        rep_media.add_method("POST", i_rep)                                   # AP21
+        rep_media.add_resource("{mid}").add_resource("confirmar").add_method("POST", i_rep)  # AP22
+        api.root.add_resource("videos").add_method("GET", i_rep)              # AP23
         (api.root.add_resource("barrios").add_resource("{barrio}")
             .add_resource("reportes").add_method("GET", i_rep))               # AP4
         api.root.add_resource("ranking").add_resource("barrios").add_method("GET", i_rep)  # AP5
@@ -208,3 +232,4 @@ class AlertaSamariaStack(Stack):
         CfnOutput(self, "ApiUrl", value=api.url, description="URL base del API Gateway")
         CfnOutput(self, "ApiId", value=api.rest_api_id, description="api-id (cambia en cada reinicio)")
         CfnOutput(self, "TableName", value=tabla.table_name, description="Tabla DynamoDB")
+        CfnOutput(self, "MediaBucketName", value=bucket_media.bucket_name, description="Bucket de fotos y videos")

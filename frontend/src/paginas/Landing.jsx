@@ -104,14 +104,14 @@ function Recorrido({ conteos }) {
     <section className="lp-recorrido" aria-label="Qué puedes reportar">
       <div className="lp-recorrido-fotos" aria-hidden="true">
         {PARADAS.map((p, i) => (
-          <img key={p.foto} src={urlFoto(p.foto, 1600)} alt="" className={i === activa ? "activa" : ""} loading={i ? "lazy" : "eager"} />
+          <img key={p.foto} src={urlFoto(p.foto, 1280)} alt="" className={i === activa ? "activa" : ""} loading="lazy" decoding="async" />
         ))}
         <span className="lp-credito">{FOTOS[PARADAS[activa].foto].lugar}. Foto: {FOTOS[PARADAS[activa].foto].autor}</span>
       </div>
       <div className="lp-recorrido-textos">
         {PARADAS.map((p, i) => (
           <article key={p.foto} className={`lp-parada ${i === activa ? "activa" : ""}`} data-i={i} ref={(el) => (refs.current[i] = el)}>
-            <img className="lp-parada-foto" src={urlFoto(p.foto, 900)} alt={FOTOS[p.foto].lugar} loading="lazy" />
+            <img className="lp-parada-foto" src={urlFoto(p.foto, 960)} alt={FOTOS[p.foto].lugar} loading="lazy" />
             <div className="lp-parada-cat">
               <IconoCategoria categoria={p.categoria} size={22} />
               <span>{p.nombre}</span>
@@ -120,7 +120,7 @@ function Recorrido({ conteos }) {
             <h3>{p.titulo}</h3>
             <p>{p.texto}</p>
             {conteos && (
-              <p className="lp-parada-vivo">
+              <p className="lp-parada-vivo" aria-live="polite">
                 {conteos[p.categoria] ? `${conteos[p.categoria]} ${conteos[p.categoria] === 1 ? "reporte activo" : "reportes activos"} de ${p.nombre.toLowerCase()} ahora` : `Sin reportes activos de ${p.nombre.toLowerCase()} en este momento`}
               </p>
             )}
@@ -181,7 +181,7 @@ export default function Landing() {
       <main id="contenido">
         {/* Hero */}
         <section className="lp-hero">
-          <img src={urlFoto("marina", 2400)} alt="La marina de Santa Marta con edificios y la Sierra al fondo" className="lp-hero-foto" fetchpriority="high" />
+          <img src={urlFoto("marina", 1920)} alt="La marina de Santa Marta con edificios y la Sierra al fondo" className="lp-hero-foto" fetchpriority="high" />
           <div className="lp-hero-velo" aria-hidden="true" />
           <div className="lp-hero-contenido">
             <h1>Sabe qué pasa en tu barrio<br />antes de salir de casa</h1>
@@ -238,7 +238,7 @@ export default function Landing() {
 
         {/* Entidades */}
         <section className="lp-entidades" id="entidades">
-          <img src={urlFoto("vistaSierra", 1600)} alt={FOTOS.vistaSierra.lugar} loading="lazy" data-reveal />
+          <img src={urlFoto("vistaSierra", 1280)} alt={FOTOS.vistaSierra.lugar} loading="lazy" data-reveal />
           <div data-reveal>
             <h2>Para la Alcaldía y las empresas de servicios</h2>
             <p>Un panel con los reportes de las categorías que atiende cada entidad, listos para despachar.</p>
@@ -262,7 +262,7 @@ export default function Landing() {
 
         {/* Cierre */}
         <section className="lp-final" data-reveal>
-          <img src={urlFoto("atardecer", 1600)} alt={FOTOS.atardecer.lugar} loading="lazy" />
+          <img src={urlFoto("atardecer", 1280)} alt={FOTOS.atardecer.lugar} loading="lazy" />
           <div>
             <h2>Mira qué está pasando<br />en Santa Marta ahora</h2>
             <Link to="/mapa" className="lp-boton grande"><MapPin size={20} weight="bold" />Ver el mapa en vivo</Link>

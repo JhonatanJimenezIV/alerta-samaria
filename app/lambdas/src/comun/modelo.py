@@ -55,6 +55,8 @@ def _base(item: dict[str, Any]) -> dict[str, Any]:
         "actualizado_en": i.get("actualizado_en", i["creado_en"]),
         "activo_hasta": i.get("activo_hasta"),
         "aviso_123": i.get("aviso_123", False),
+        "media_count": i.get("media_count", 0),
+        "tiene_video": i.get("tiene_video", False),
     }
 
 

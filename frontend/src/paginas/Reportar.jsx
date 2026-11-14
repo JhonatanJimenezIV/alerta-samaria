@@ -2,8 +2,8 @@ import L from "leaflet";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import { Link, useNavigate } from "react-router-dom";
-import { api } from "../api.js";
-import { Crosshair, LockKey, MapPin, Phone } from "@phosphor-icons/react";
+import { adjuntarArchivo, api } from "../api.js";
+import { Camera, Crosshair, LockKey, MapPin, Phone, Trash, VideoCamera } from "@phosphor-icons/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { BARRIOS, CENTRO_SANTA_MARTA, NOMBRES_CATEGORIA, URGENCIA, barrioMasCercano } from "../constantes.js";
 import { CAPA_MAPA } from "../componentes/MapaReportes.jsx";
@@ -54,6 +54,8 @@ export default function Reportar() {
   const [centrar, setCentrar] = useState(null);
   const [error, setError] = useState("");
   const [enviando, setEnviando] = useState(false);
+  const [archivos, setArchivos] = useState([]);
+  const [progreso, setProgreso] = useState("");
 
   useEffect(() => {
     api("/categorias").then((d) => setCategorias(d.categorias)).catch((e) => setError(e.message));
@@ -94,16 +96,45 @@ export default function Reportar() {
     setError("");
     setEnviando(true);
     try {
+      setProgreso("Publicando el reporte");
       const r = await api("/reportes", {
         metodo: "POST",
         body: { ...form, lat: posicion[0], lng: posicion[1], ubic_reportante: gps ? { lat: gps[0], lng: gps[1] } : undefined },
       });
+      // Los adjuntos se suben después de crear el reporte, uno por uno, directo a S3
+      const fallidos = [];
+      for (const [i, a] of archivos.entries()) {
+        try {
+          await adjuntarArchivo(r.id, a, (pct) => setProgreso(`Subiendo ${i + 1} de ${archivos.length}: ${pct} %`));
+        } catch (err) {
+          fallidos.push(`${a.name}: ${err.message}`);
+        }
+      }
+      if (fallidos.length) {
+        setError(`El reporte se publicó, pero no se pudieron subir estos archivos. ${fallidos.join(". ")}`);
+        setTimeout(() => navegar(`/mapa?r=${r.id}`), 4000);
+        return;
+      }
       navegar(`/mapa?r=${r.id}`);
     } catch (err) {
       setError(err.message);
     } finally {
       setEnviando(false);
+      setProgreso("");
     }
+  };
+
+  const LIMITES = { foto: 8, video: 50 };
+  const agregarArchivos = (lista) => {
+    const nuevos = [...archivos];
+    for (const a of lista) {
+      const clase = a.type.startsWith("video/") ? "video" : a.type.startsWith("image/") ? "foto" : null;
+      if (!clase) { setError(`${a.name} no es una foto ni un video`); continue; }
+      if (a.size > LIMITES[clase] * 1024 * 1024) { setError(`${a.name} supera el máximo de ${LIMITES[clase]} MB para un ${clase}`); continue; }
+      if (nuevos.length >= 4) { setError("Puedes adjuntar máximo 4 fotos o videos"); break; }
+      nuevos.push(a);
+    }
+    setArchivos(nuevos);
   };
 
   return (
@@ -153,13 +184,38 @@ export default function Reportar() {
         </div>
         <label>Punto de referencia<input placeholder="Frente a la tienda…" {...campo("referencia")} /></label>
 
+        {form.categoria && form.categoria !== "seguridad" && (
+          <div className="adjuntos">
+            <span className="adjuntos-titulo">Fotos o videos <span className="nota">(opcional, máximo 4; fotos hasta 8 MB, videos hasta 50 MB)</span></span>
+            <label className="adjuntos-boton">
+              <input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" multiple
+                     onChange={(e) => { agregarArchivos([...e.target.files]); e.target.value = ""; }} />
+              <Camera size={20} weight="bold" />Agregar foto o video
+            </label>
+            {archivos.length > 0 && (
+              <ul className="adjuntos-lista">
+                {archivos.map((a, i) => (
+                  <li key={`${a.name}-${i}`}>
+                    {a.type.startsWith("video/") ? <VideoCamera size={18} weight="bold" /> : <Camera size={18} weight="bold" />}
+                    <span>{a.name}</span>
+                    <span className="nota">{(a.size / 1024 / 1024).toFixed(1)} MB</span>
+                    <button type="button" className="enlace" aria-label={`Quitar ${a.name}`} onClick={() => setArchivos(archivos.filter((_, j) => j !== i))}><Trash size={18} weight="bold" /></button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="nota">Evita que se vean rostros o placas de vehículos.</p>
+          </div>
+        )}
+        {form.categoria === "seguridad" && <p className="nota">En Seguridad no se permiten fotos ni videos, para proteger a las personas involucradas.</p>}
+
         <label className="check"><input type="checkbox" checked={form.anonimo}
                onChange={(e) => setForm({ ...form, anonimo: e.target.checked })} /> Publicar como anónimo</label>
         <label className="check"><input type="checkbox" checked={form.contacto_autorizado}
                onChange={(e) => setForm({ ...form, contacto_autorizado: e.target.checked })} />
           Autorizo que la entidad responsable me contacte sobre este reporte</label>
 
-        <button className="boton reportar ancho" disabled={enviando}>{enviando ? "Publicando…" : "Publicar reporte"}</button>
+        <button className="boton reportar ancho" disabled={enviando}>{enviando ? (progreso || "Publicando…") : "Publicar reporte"}</button>
       </form>
 
       <div className="caja mapa-selector">

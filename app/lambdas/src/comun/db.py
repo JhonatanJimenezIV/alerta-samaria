@@ -123,22 +123,31 @@ def obtener_reporte(reporte_id: str) -> dict[str, Any] | None:
     return r.get("Item")
 
 
-def obtener_reporte_completo(reporte_id: str) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+def obtener_reporte_completo(reporte_id: str) -> tuple[dict[str, Any] | None, list[dict[str, Any]], list[dict[str, Any]]]:
     """
-    Un solo Query sobre PK=REP#<id> trae el reporte (META), su historial
-    (EVT#...) y sus confirmaciones (CONF#...). Sin "JOIN" en la Lambda.
+    Un solo Query sobre PK=REP#<id> trae el reporte (META), su historial (EVT#...),
+    sus confirmaciones (CONF#...) y sus fotos/videos (MEDIA#...). Sin "JOIN" en la Lambda.
     """
-    r = tabla().query(KeyConditionExpression="PK = :pk",
-                      ExpressionAttributeValues={":pk": f"REP#{reporte_id}"})
     meta = None
     eventos: list[dict[str, Any]] = []
-    for item in r.get("Items", []):
-        if item["SK"] == "META":
-            meta = item
-        elif item["SK"].startswith("EVT#"):
-            eventos.append(item)
+    medias: list[dict[str, Any]] = []
+    kwargs: dict[str, Any] = {"KeyConditionExpression": "PK = :pk",
+                              "ExpressionAttributeValues": {":pk": f"REP#{reporte_id}"}}
+    while True:
+        r = tabla().query(**kwargs)
+        for item in r.get("Items", []):
+            if item["SK"] == "META":
+                meta = item
+            elif item["SK"].startswith("EVT#"):
+                eventos.append(item)
+            elif item["SK"].startswith("MEDIA#") and item.get("estado") == "listo":
+                medias.append(item)
+        if "LastEvaluatedKey" not in r:
+            break
+        kwargs["ExclusiveStartKey"] = r["LastEvaluatedKey"]
     eventos.sort(key=lambda e: e["SK"])
-    return meta, eventos
+    medias.sort(key=lambda m: m["SK"])
+    return meta, eventos, medias
 
 
 def obtener_reportes_lote(ids: list[str]) -> dict[str, dict[str, Any]]:

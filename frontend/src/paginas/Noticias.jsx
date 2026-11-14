@@ -1,9 +1,9 @@
 import { FacebookLogo, Newspaper } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 
-// Página de Facebook del medio local. Se incrusta con el plugin oficial de Facebook (Page Plugin):
+// Página de Facebook de Santa Marta Al Día (medio local), se puede cambiar con VITE_FACEBOOK_PAGE. Se incrusta con el plugin oficial de Facebook (Page Plugin):
 // se actualiza solo y no copiamos ni almacenamos su contenido.
-const PAGINA_FACEBOOK = import.meta.env.VITE_FACEBOOK_PAGE || "";
+const PAGINA_FACEBOOK = import.meta.env.VITE_FACEBOOK_PAGE || "https://www.facebook.com/SantaMartaAD";
 
 export default function Noticias() {
   const contenedor = useRef(null);
@@ -24,7 +24,7 @@ export default function Noticias() {
     <div className="pagina estrecha" ref={contenedor}>
       <div className="pagina-cabecera">
         <h1>Noticias de Santa Marta</h1>
-        <p>Las publicaciones más recientes de un medio local, directamente desde su página de Facebook.</p>
+        <p>Las publicaciones más recientes de Santa Marta Al Día, un medio local, directamente desde su página de Facebook. El contenido es de ese medio.</p>
       </div>
       {src ? (
         <div className="fb-marco">

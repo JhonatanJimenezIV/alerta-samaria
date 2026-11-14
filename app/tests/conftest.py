@@ -22,9 +22,10 @@ os.environ.update({
     "AWS_ACCESS_KEY_ID": "test", "AWS_SECRET_ACCESS_KEY": "test", "AWS_DEFAULT_REGION": "us-east-1",
     "TABLE_NAME": "test-tabla", "REDIS_HOST": "localhost", "REDIS_PORT": "6379",
     "RATE_REPORTES_HORA": "5", "RATE_LECTURAS_MINUTO": "1000", "CONFIRMACIONES_REQUERIDAS": "3",
+    "MEDIA_BUCKET": "test-media",
 })
 
-from comun import cache, db  # noqa: E402
+from comun import cache, db, media  # noqa: E402
 
 
 def _crear_tabla() -> Any:
@@ -50,9 +51,12 @@ def _crear_tabla() -> Any:
 def tabla():
     with mock_aws():
         db.reiniciar()
+        media.reiniciar()
+        boto3.client("s3", region_name="us-east-1").create_bucket(Bucket="test-media")
         t = _crear_tabla()
         yield t
         db.reiniciar()
+        media.reiniciar()
 
 
 @pytest.fixture
