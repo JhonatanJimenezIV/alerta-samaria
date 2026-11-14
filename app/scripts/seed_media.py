@@ -158,4 +158,18 @@ for url in reversed(NOTICIAS):  # la primera de la lista queda como la más reci
     except Exception as e:  # noqa: BLE001
         print(f"   ⚠ {url[:60]}…: {e}")
 
+# ── Usuarios de demostración para la pantalla "Ingresar" ──────────────
+# Se reconstruye desde DynamoDB por si seed.py se interrumpió antes de escribir el archivo.
+usuarios = todos_los_items(FilterExpression=Attr("tipo").eq("USUARIO"))
+demo = {"ciudadanos": {u["nombre"]: u["id"] for u in sorted(usuarios, key=lambda u: u.get("creado_en", "")) if u.get("rol") == "ciudadano"},
+        "entidades": {u["nombre"]: u["id"] for u in usuarios if u.get("rol") == "entidad"}}
+destinos = [os.path.join(os.path.dirname(__file__), "usuarios_demo.json")]
+if os.path.isdir("/frontend"):
+    os.makedirs("/frontend/public", exist_ok=True)
+    destinos.append("/frontend/public/usuarios_demo.json")
+for ruta in destinos:
+    with open(ruta, "w", encoding="utf-8") as f:
+        json.dump(demo, f, ensure_ascii=False, indent=2)
+print(f"▶ Usuarios de demostración actualizados: {len(demo['ciudadanos'])} ciudadanos y {len(demo['entidades'])} entidades")
+
 print(f"\n✔ Listo: {subidos} videos y {nuevas} noticias nuevas.")
