@@ -204,6 +204,9 @@ class AlertaSamariaStack(Stack):
         rep_media.add_method("POST", i_rep)                                   # AP21
         rep_media.add_resource("{mid}").add_resource("confirmar").add_method("POST", i_rep)  # AP22
         api.root.add_resource("videos").add_method("GET", i_rep)              # AP23
+        res_noticias = api.root.add_resource("noticias")
+        res_noticias.add_method("GET", i_rep)                                 # AP24
+        res_noticias.add_method("POST", i_rep)                                # AP25
         (api.root.add_resource("barrios").add_resource("{barrio}")
             .add_resource("reportes").add_method("GET", i_rep))               # AP4
         api.root.add_resource("ranking").add_resource("barrios").add_method("GET", i_rep)  # AP5

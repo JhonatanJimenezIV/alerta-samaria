@@ -5,6 +5,7 @@ import { api } from "../api.js";
 import { haceCuanto } from "../constantes.js";
 import { Fuente, Urgencia } from "../componentes/Insignias.jsx";
 import { IconoCategoria } from "../iconos.jsx";
+import { Credito } from "../componentes/Galeria.jsx";
 
 export default function Videos() {
   const [datos, setDatos] = useState(null);
@@ -46,6 +47,7 @@ export default function Videos() {
                   <p className="nota">{v.barrio}, {haceCuanto(v.creado_en)}</p>
                 </div>
               </div>
+              {v.credito && <div style={{ padding: "0 16px" }}><Credito credito={v.credito} /></div>}
               <div className="video-pie">
                 <Urgencia nivel={v.urgencia} />
                 <Link to={`/mapa?r=${v.rid}`} className="enlace"><MapPin size={16} weight="bold" />Ver en el mapa</Link>

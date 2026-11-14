@@ -70,3 +70,17 @@ def test_videos_sin_redis(tabla):
     feed = cuerpo(reportes.main(evento("GET", "/videos"), None))
     assert feed["_fuente"] == "dynamodb" and feed["videos"][0]["barrio"] == "Taganga"
     cache.usar_cliente(None)
+
+
+def test_noticias(redis_fake, tabla):
+    from conftest import crear_entidad
+    ent, ciudadano = crear_entidad(["vias"]), crear_ciudadano()
+    url = "https://www.facebook.com/reel/1108482025553474/"
+    assert reportes.main(evento("POST", "/noticias", body={"url": url}, usuario=ciudadano), None)["statusCode"] == 403
+    assert reportes.main(evento("POST", "/noticias", body={"url": "https://otro.com/x"}, usuario=ent), None)["statusCode"] == 400
+    assert cuerpo(reportes.main(evento("POST", "/noticias", body={"url": url}, usuario=ent), None))["clase"] == "video"
+    reportes.main(evento("POST", "/noticias", body={"url": "https://www.facebook.com/SantaMartaAD/posts/pfbid0abc"}, usuario=ent), None)
+    r1 = cuerpo(reportes.main(evento("GET", "/noticias"), None))
+    r2 = cuerpo(reportes.main(evento("GET", "/noticias"), None))
+    assert r1["_fuente"] == "dynamodb" and r2["_fuente"] == "cache"
+    assert [n["clase"] for n in r1["noticias"]] == ["post", "video"]   # más reciente primero

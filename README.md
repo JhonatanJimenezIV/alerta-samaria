@@ -77,6 +77,8 @@ Autenticación simplificada: el header `X-Usuario-Id` identifica al usuario
 | POST | `/reportes/{id}/media` | AP21 | autor del reporte |
 | POST | `/reportes/{id}/media/{mid}/confirmar` | AP22 | autor del reporte |
 | GET | `/videos` | AP23 | — |
+| GET | `/noticias` | AP24 | — |
+| POST | `/noticias` | AP25 | entidad |
 
 Las respuestas de lectura incluyen `"_fuente": "cache"` o `"dynamodb"` para evidenciar el caché.
 
@@ -120,7 +122,7 @@ alerta-samaria/
     │   ├── health.py
     │   └── comun/            # db, cache (Redis), catálogo, modelo (privacidad), estados, http
     ├── scripts/              # deploy.sh, post_deploy.py, seed.py
-    └── tests/                # pytest + moto + fakeredis (28 tests)
+    └── tests/                # pytest + moto + fakeredis (29 tests)
 ```
 
 ## Decisiones clave (resumen para la sustentación)

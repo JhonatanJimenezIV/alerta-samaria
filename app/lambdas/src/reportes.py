@@ -12,6 +12,8 @@ Lambda reportes — endpoints públicos (sin cuenta) y del ciudadano.
     POST /reportes/{id}/media            AP21 pedir URL de subida     URL prefirmada de S3 + ítem MEDIA#
     POST /reportes/{id}/media/{mid}/confirmar  AP22 confirmar subida  HeadObject + Write-Through a media:videos
     GET  /videos                         AP23 videos recientes        Redis ZSET (respaldo GSI4 MEDIA#<fecha>)
+    GET  /noticias                       AP24 noticias del medio      Cache-Aside noticias:recientes → Query PK=NOTICIAS
+    POST /noticias                       AP25 publicar noticia        rol entidad; invalida la caché
 """
 import logging
 import os
@@ -463,7 +465,8 @@ def _resumen_video(item: dict[str, Any], meta: dict[str, Any]) -> dict[str, Any]
     m = db.desde_dynamo(meta)
     return {"id": item["mid"], "rid": item["rid"], "clave": item["clave"], "content_type": item["content_type"],
             "creado_en": item["creado_en"], "categoria": m["categoria"], "subtipo_nombre": m.get("subtipo_nombre"),
-            "barrio": m["barrio"], "urgencia": m["urgencia"], "estado": m["estado"]}
+            "barrio": m["barrio"], "urgencia": m["urgencia"], "estado": m["estado"],
+            "credito": db.desde_dynamo(item.get("credito"))}
 
 
 def _videos_desde_dynamo(limite: int) -> list[dict[str, Any]]:
@@ -511,6 +514,48 @@ def videos(event: dict[str, Any]) -> dict[str, Any]:
     return respuesta(200, {"videos": lista, "total": len(lista), "_fuente": fuente})
 
 
+# ── AP24 / AP25: noticias del medio aliado ───────────────────────────
+# Publicaciones de Facebook de Santa Marta Al Día que se muestran con los plugins oficiales
+# de Facebook (video.php / post.php). Solo se guarda el enlace: el contenido sigue siendo del medio.
+#   PK=NOTICIAS  SK=<fecha>#<id>   (partición única: pocas escrituras, siempre se lee completa y en orden)
+
+CLAVE_NOTICIAS = "noticias:recientes"
+
+
+def _clasificar_url(url: str) -> str | None:
+    if not url.startswith("https://www.facebook.com/"):
+        return None
+    return "video" if ("/reel/" in url or "/videos/" in url or "/watch" in url) else "post"
+
+
+def noticias(event: dict[str, Any]) -> dict[str, Any]:
+    _limitar_lectura(event)
+    en_cache = cache.get_json(CLAVE_NOTICIAS)
+    if en_cache is not None:
+        return respuesta(200, {"noticias": en_cache, "total": len(en_cache), "_fuente": "cache"})
+    items = db.tabla().query(KeyConditionExpression=Key("PK").eq("NOTICIAS"), ScanIndexForward=False, Limit=40).get("Items", [])
+    lista = [{"id": i["nid"], "url": i["url"], "clase": i["clase"], "fuente": i.get("fuente", ""),
+              "titulo": i.get("titulo", ""), "creado_en": i["creado_en"]} for i in items]
+    cache.set_json(CLAVE_NOTICIAS, lista, 300)
+    return respuesta(200, {"noticias": lista, "total": len(lista), "_fuente": "dynamodb"})
+
+
+def publicar_noticia(event: dict[str, Any]) -> dict[str, Any]:
+    usuario_actual(event, rol="entidad")
+    datos = cuerpo_json(event)
+    url = str(datos.get("url", "")).strip().split("?")[0]
+    clase = _clasificar_url(url)
+    if not clase:
+        raise ErrorApi(400, "Pega el enlace de una publicación, video o reel de Facebook (https://www.facebook.com/...)")
+    momento = db.iso(db.ahora())
+    nid = db.ulid()
+    db.tabla().put_item(Item={"PK": "NOTICIAS", "SK": f"{momento}#{nid}", "tipo": "NOTICIA", "nid": nid, "url": url,
+                              "clase": clase, "fuente": str(datos.get("fuente") or "Santa Marta Al Día")[:80],
+                              "titulo": str(datos.get("titulo", ""))[:160], "creado_en": momento})
+    cache.borrar(CLAVE_NOTICIAS)
+    return respuesta(201, {"id": nid, "url": url, "clase": clase})
+
+
 RUTAS = {
     ("GET", "/reportes/feed"): feed,
     ("GET", "/reportes/cerca"): cerca,
@@ -523,6 +568,8 @@ RUTAS = {
     ("POST", "/reportes/{id}/media"): pedir_subida,
     ("POST", "/reportes/{id}/media/{mid}/confirmar"): confirmar_subida,
     ("GET", "/videos"): videos,
+    ("GET", "/noticias"): noticias,
+    ("POST", "/noticias"): publicar_noticia,
 }
 
 

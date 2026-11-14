@@ -34,9 +34,10 @@ function Clics({ onClic }) {
 }
 
 export const CAPA_MAPA = {
-  // Estilo claro de CARTO sobre datos de OpenStreetMap: deja que los marcadores sean lo que resalta
-  url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  // Teselas estándar de OpenStreetMap: no requieren API key (CARTO ahora la exige)
+  url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  maxZoom: 19,
 };
 
 export default function MapaReportes({ reportes, seleccionado, onSeleccionar, circulo, onClicMapa, enfocar }) {

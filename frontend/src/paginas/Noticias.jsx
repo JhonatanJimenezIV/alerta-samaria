@@ -1,47 +1,114 @@
-import { FacebookLogo, Newspaper } from "@phosphor-icons/react";
-import { useEffect, useRef, useState } from "react";
+import { ArrowSquareOut, Newspaper, Plus } from "@phosphor-icons/react";
+import { useEffect, useState } from "react";
+import { api } from "../api.js";
+import { haceCuanto } from "../constantes.js";
+import { Fuente } from "../componentes/Insignias.jsx";
+import { useSesion } from "../sesion.jsx";
 
-// Página de Facebook de Santa Marta Al Día (medio local), se puede cambiar con VITE_FACEBOOK_PAGE. Se incrusta con el plugin oficial de Facebook (Page Plugin):
-// se actualiza solo y no copiamos ni almacenamos su contenido.
-const PAGINA_FACEBOOK = import.meta.env.VITE_FACEBOOK_PAGE || "https://www.facebook.com/SantaMartaAD";
+// Noticias de Santa Marta Al Día. Cada publicación se muestra con el plugin oficial de Facebook
+// (video.php para videos y reels, post.php para publicaciones): se ve y se reproduce aquí mismo.
+// En la base de datos solo se guarda el enlace; el contenido sigue siendo del medio.
+const PAGINA = "https://www.facebook.com/SantaMartaAD";
+const ANCHO = 420;
+
+function Publicacion({ n }) {
+  const esVideo = n.clase === "video";
+  const esReel = n.url.includes("/reel/");
+  const plugin = esVideo ? "video" : "post";
+  const src = `https://www.facebook.com/plugins/${plugin}.php?${new URLSearchParams({ href: n.url, show_text: "true", width: String(ANCHO) })}`;
+  return (
+    <article className="noticia">
+      <header className="noticia-cab">
+        <span className="noticia-medio">SM</span>
+        <div>
+          <b>{n.fuente || "Santa Marta Al Día"}</b>
+          <span className="nota">{esVideo ? (esReel ? "Reel" : "Video") : "Publicación"}, agregada {haceCuanto(n.creado_en)}</span>
+        </div>
+        <a href={n.url} target="_blank" rel="noreferrer" className="enlace" aria-label="Abrir en Facebook"><ArrowSquareOut size={18} weight="bold" /></a>
+      </header>
+      <iframe
+        title={`Publicación de ${n.fuente || "Santa Marta Al Día"}`}
+        src={src}
+        width={ANCHO}
+        height={esReel ? 900 : esVideo ? 520 : 640}
+        loading="lazy"
+        style={{ border: 0, overflow: "hidden", maxWidth: "100%" }}
+        scrolling="no"
+        allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+        allowFullScreen
+      />
+    </article>
+  );
+}
+
+function Agregar({ alAgregar }) {
+  const [url, setUrl] = useState("");
+  const [estado, setEstado] = useState("");
+  const enviar = async (e) => {
+    e.preventDefault();
+    setEstado("");
+    try {
+      await api("/noticias", { metodo: "POST", body: { url } });
+      setUrl("");
+      setEstado("Publicación agregada.");
+      alAgregar();
+    } catch (err) {
+      setEstado(err.message);
+    }
+  };
+  return (
+    <form className="caja" onSubmit={enviar}>
+      <h2>Agregar una publicación</h2>
+      <p className="nota">Pega el enlace de una publicación, video o reel de la página de Facebook del medio.</p>
+      <div className="en-linea" style={{ marginTop: 12 }}>
+        <input required placeholder="https://www.facebook.com/reel/..." value={url} onChange={(e) => setUrl(e.target.value)} />
+        <button className="boton primario"><Plus size={18} weight="bold" />Agregar</button>
+      </div>
+      {estado && <p className="nota destacada" style={{ marginTop: 12 }}>{estado}</p>}
+    </form>
+  );
+}
 
 export default function Noticias() {
-  const contenedor = useRef(null);
-  const [ancho, setAncho] = useState(500);
-  useEffect(() => {
-    const medir = () => setAncho(Math.min(500, Math.max(280, (contenedor.current?.clientWidth || 500) - 32)));
-    medir();
-    window.addEventListener("resize", medir);
-    return () => window.removeEventListener("resize", medir);
-  }, []);
-
-  const src = PAGINA_FACEBOOK && `https://www.facebook.com/plugins/page.php?${new URLSearchParams({
-    href: PAGINA_FACEBOOK, tabs: "timeline,videos", width: String(ancho), height: "900",
-    small_header: "false", adapt_container_width: "true", hide_cover: "false", show_facepile: "false",
-  })}`;
+  const { usuario } = useSesion();
+  const [datos, setDatos] = useState(null);
+  const [error, setError] = useState("");
+  const cargar = () => api("/noticias").then(setDatos).catch((e) => setError(e.message));
+  useEffect(() => { cargar(); }, []);
 
   return (
-    <div className="pagina estrecha" ref={contenedor}>
-      <div className="pagina-cabecera">
-        <h1>Noticias de Santa Marta</h1>
-        <p>Las publicaciones más recientes de Santa Marta Al Día, un medio local, directamente desde su página de Facebook. El contenido es de ese medio.</p>
-      </div>
-      {src ? (
-        <div className="fb-marco">
-          <iframe title="Noticias desde Facebook" src={src} width={ancho} height="900" style={{ border: 0, overflow: "hidden" }}
-                  allow="encrypted-media; picture-in-picture; web-share" loading="lazy" />
-        </div>
-      ) : (
-        <div className="caja estado-vacio">
+    <div className="pagina noticias-pagina">
+      <div className="noticias-columna">
+        <div className="pagina-cabecera lista-cabecera" style={{ padding: 0, alignItems: "flex-end" }}>
           <div>
-            <div className="icono-grande"><Newspaper size={32} weight="bold" /></div>
-            <h2>Falta conectar la página de noticias</h2>
-            <p>Agrega la dirección de la página de Facebook del medio en <code>frontend/.env.local</code> como
-              <code>VITE_FACEBOOK_PAGE</code> y reinicia <code>npm run dev</code>.</p>
-            <p className="nota" style={{ display: "inline-flex", gap: 6, alignItems: "center" }}><FacebookLogo size={18} weight="bold" />Se muestra con el plugin oficial de Facebook.</p>
+            <h1>Noticias de Santa Marta</h1>
+            <p>Lo último de Santa Marta Al Día. Los videos se reproducen aquí mismo; el contenido es de ese medio.</p>
           </div>
+          {datos && <Fuente fuente={datos._fuente} />}
         </div>
-      )}
+        {error && <p className="error">{error}</p>}
+        {!datos && !error && [0, 1].map((i) => <div key={i} className="esqueleto" style={{ height: 520, maxWidth: ANCHO, margin: "0 auto 16px" }} />)}
+        {datos?.total === 0 && (
+          <div className="caja estado-vacio">
+            <div>
+              <div className="icono-grande"><Newspaper size={32} weight="bold" /></div>
+              <h2>Todavía no hay noticias</h2>
+              <p>Corre <code>python scripts/seed.py</code> o agrega una publicación desde una cuenta de entidad.</p>
+            </div>
+          </div>
+        )}
+        <div className="noticias-lista">
+          {datos?.noticias.map((n) => <Publicacion key={n.id} n={n} />)}
+        </div>
+      </div>
+      <aside className="noticias-lado">
+        {usuario?.rol === "entidad" && <Agregar alAgregar={cargar} />}
+        <div className="caja">
+          <h2>Santa Marta Al Día</h2>
+          <p className="nota">Medio de comunicación web de Santa Marta. Las publicaciones se muestran con los plugins oficiales de Facebook.</p>
+          <a href={PAGINA} target="_blank" rel="noreferrer" className="boton" style={{ marginTop: 12 }}><ArrowSquareOut size={18} weight="bold" />Ver la página completa</a>
+        </div>
+      </aside>
     </div>
   );
 }

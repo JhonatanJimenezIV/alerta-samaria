@@ -11,14 +11,17 @@ seed.py — Carga datos de demostración en el emulador.
 
 Los ids de los usuarios demo quedan en scripts/usuarios_demo.json (para el frontend/Postman).
 """
+import hashlib
 import json
 import os
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 import boto3
+from botocore.config import Config
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lambdas", "src"))
 from comun.catalogo import CATALOGO_INICIAL  # noqa: E402
@@ -104,6 +107,8 @@ REPORTES = [
     (1, "ambiente", "aguas_estancadas", "Los Almendros", "Agua estancada con zancudos, riesgo de dengue", "Lote baldío", False),
     (2, "servicios", "sin_luz", "Bonda", "Sin energía en todo el corregimiento", "", True),
     (4, "seguridad", "robo", "Bastidas", "Atracaron a un domiciliario", "", False),
+    (4, "vias", "arroyo", "Mamatoco", "El arroyo se creció con el aguacero y no deja pasar a nadie", "Bajando de la avenida", False),
+    (5, "vias", "via_cerrada", "Centro Histórico", "Cerraron un carril por obras y pusieron un semáforo provisional", "Carrera 5", False),
 ]
 creados = []
 for i, (autor, cat, sub, barrio, desc, ref, contacto) in enumerate(REPORTES):
@@ -137,6 +142,76 @@ api("PATCH", f"/entidad/reportes/{creados[0][0]}/estado",
 api("PATCH", f"/entidad/reportes/{creados[2][0]}/estado",
     {"estado": "resuelto", "nota": "Semáforo reparado"}, usuario="ENT-MOVILIDAD")
 
+# ── 6. Videos de ejemplo para la demostración ───────────────────────
+# Clips con licencia libre de Wikimedia Commons (NO son de Santa Marta: se marcan como ejemplo
+# y se muestra su crédito). Se adjuntan con el mismo flujo de la app: pedir URL → subir a S3 → confirmar.
+print("▶ Videos de ejemplo (Wikimedia Commons)")
+VIDEOS = [
+    # (subtipo del reporte, archivo en Commons, autor, licencia)
+    ("calle_inundada", "Presidente Getúlio Vargas alagada em chuva fortes.webm", "Vitorperrut555", "CC BY-SA 4.0"),
+    ("arroyo", "Flood on the street.webm", "Amuzujoe", "CC BY-SA 4.0"),
+    ("incendio_forestal", "Požar na italijanski strani.webm", "Bojan Marušič", "CC BY-SA 4.0"),
+    ("trancon", "Ayalon trafic congestion time lapse.webm", "Saifunny", "CC BY-SA 4.0"),
+    ("semaforo_danado", "Tirana traffic lights.webm", "Lan G.", "CC BY 4.0"),
+    ("via_cerrada", "Temporary traffic signal at Colonel By Drive.webm", "137a", "CC0"),
+    ("tuberia_rota", "Heavy rainfall in Bengaluru, 30May2013.webm", "Subhashish Panigrahi", "CC BY-SA 3.0"),
+]
+s3 = boto3.client("s3", endpoint_url=os.environ.get("AWS_ENDPOINT_URL", "http://emulador:4566"),
+                  config=Config(s3={"addressing_style": "path"}))
+bucket = o.get("MediaBucketName")
+por_subtipo = {sub: (rid, autor) for rid, autor, _, sub in creados}
+
+
+def url_commons(nombre: str) -> str:
+    n = nombre.replace(" ", "_")
+    h = hashlib.md5(n.encode()).hexdigest()
+    return f"https://upload.wikimedia.org/wikipedia/commons/{h[0]}/{h[:2]}/{urllib.parse.quote(n)}"
+
+
+subidos = 0
+for sub, archivo, autor_v, licencia in VIDEOS:
+    if not bucket or sub not in por_subtipo:
+        continue
+    rid, autor = por_subtipo[sub]
+    try:
+        req = urllib.request.Request(url_commons(archivo), headers={"User-Agent": "AlertaSamaria/1.0 (proyecto academico)"})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            datos = r.read()
+    except Exception as e:  # noqa: BLE001
+        print(f"   ⚠ No se pudo descargar {archivo}: {e}")
+        continue
+    pedido = api("POST", f"/reportes/{rid}/media", {"content_type": "video/webm", "tamano": len(datos)}, usuario=ciudadanos[autor])
+    if not pedido.get("id"):
+        continue
+    clave = f"reportes/{rid}/{pedido['id']}.webm"
+    s3.put_object(Bucket=bucket, Key=clave, Body=datos, ContentType="video/webm")
+    tabla.update_item(Key={"PK": f"REP#{rid}", "SK": f"MEDIA#{pedido['id']}"},
+                      UpdateExpression="SET credito = :c",
+                      ExpressionAttributeValues={":c": {"ejemplo": True, "titulo": archivo.rsplit(".", 1)[0], "autor": autor_v,
+                                                        "licencia": licencia, "fuente": "Wikimedia Commons",
+                                                        "url": "https://commons.wikimedia.org/wiki/File:" + urllib.parse.quote(archivo.replace(" ", "_"))}})
+    if api("POST", f"/reportes/{rid}/media/{pedido['id']}/confirmar", {}, usuario=ciudadanos[autor]).get("id"):
+        subidos += 1
+        print(f"   ✔ {archivo} → reporte de {sub}")
+
+# ── 7. Noticias del medio aliado (enlaces a sus publicaciones de Facebook) ──
+print("▶ Noticias de Santa Marta Al Día")
+NOTICIAS = [
+    "https://www.facebook.com/SantaMartaAD/posts/pfbid0RnK1mfL396i7idzdwZn5XKWya8xqXXtVhQuczKTvsB8v6PvpZYvXDxkWGFLvirxNl",
+    "https://www.facebook.com/reel/2306879336814814/",
+    "https://www.facebook.com/reel/1108482025553474/",
+    "https://www.facebook.com/SantaMartaAD/posts/pfbid0HdegRkUYzr4TegfMP7CWzn31PrfSwuXxjHN9vNeqejRT6PwzDsjcH1j7oGtBpSGgl",
+    "https://www.facebook.com/reel/1280256047855161/",
+    "https://www.facebook.com/reel/1724472399394918/",
+    "https://www.facebook.com/SantaMartaAD/posts/pfbid01JMvYaGLUtR9y9Bb2WtTcqmwyBUJRvLm6Yf7VU7SuJ6J6xsTtZHaG4S6CVDwQCBGl",
+    "https://www.facebook.com/reel/1352826823489271/",
+    "https://www.facebook.com/reel/1111179775071148/",
+    "https://www.facebook.com/reel/1673897664181144/",
+]
+for url in reversed(NOTICIAS):  # la primera de la lista queda como la más reciente
+    api("POST", "/noticias", {"url": url, "fuente": "Santa Marta Al Día"}, usuario="ENT-SERVICIOS")
+    time.sleep(0.01)
+
 demo = {"ciudadanos": dict(zip([c[0] for c in CIUDADANOS], ciudadanos)),
         "entidades": {nombre: uid for uid, nombre, _ in ENTIDADES}}
 with open(os.path.join(os.path.dirname(__file__), "usuarios_demo.json"), "w", encoding="utf-8") as f:
@@ -147,7 +222,7 @@ if os.path.isdir("/frontend"):  # el frontend los muestra en la pantalla "Ingres
         json.dump(demo, f, ensure_ascii=False, indent=2)
 
 print(f"""
-✔ Listo: {len(creados)} reportes, {len(ciudadanos)} ciudadanos y {len(ENTIDADES)} entidades.
+✔ Listo: {len(creados)} reportes, {subidos} videos, {len(NOTICIAS)} noticias, {len(ciudadanos)} ciudadanos y {len(ENTIDADES)} entidades.
   Ids de usuarios demo en scripts/usuarios_demo.json (úsalos en el header X-Usuario-Id).
   Revisa Redis desde tu máquina:  docker compose exec redis redis-cli ZREVRANGE feed:ciudad 0 -1
 """)

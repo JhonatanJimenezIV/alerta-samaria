@@ -1,7 +1,18 @@
 """Muestra las URLs del API y escribe frontend/.env.local para el frontend en React."""
 import os
 
+import redis
+
 from comun_scripts import outputs, url_host
+
+# Tras reiniciar el emulador, DynamoDB queda vacía pero Redis (con persistencia AOF) conserva
+# el feed, el ranking y los detalles viejos. Redis es solo caché: se vacía para que no muestre
+# datos que ya no existen en la fuente de verdad.
+try:
+    redis.Redis(host=os.environ.get("REDIS_HOST", "redis"), port=int(os.environ.get("REDIS_PORT", 6379))).flushdb()
+    print("  ✔ Caché de Redis vaciada (la fuente de verdad es DynamoDB)")
+except redis.RedisError as e:
+    print(f"  ⚠ No se pudo vaciar Redis: {e}")
 
 o = outputs()
 api_id = o["ApiId"]

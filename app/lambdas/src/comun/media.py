@@ -86,5 +86,7 @@ def tamano_subido(clave: str) -> int | None:
 
 
 def publico(item: dict[str, Any]) -> dict[str, Any]:
+    from comun.db import desde_dynamo
     return {"id": item["mid"], "clase": item["clase"], "content_type": item["content_type"],
-            "url": url_lectura(item["clave"]), "creado_en": item["creado_en"]}
+            "url": url_lectura(item["clave"]), "creado_en": item["creado_en"],
+            "credito": desde_dynamo(item.get("credito"))}
