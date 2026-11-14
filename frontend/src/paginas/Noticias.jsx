@@ -4,6 +4,7 @@ import { api } from "../api.js";
 import { haceCuanto } from "../constantes.js";
 import { Fuente } from "../componentes/Insignias.jsx";
 import { useSesion } from "../sesion.jsx";
+import PaginaHero from "../componentes/PaginaHero.jsx";
 
 // Noticias de Santa Marta Al Día. Cada publicación se muestra con el plugin oficial de Facebook
 // (video.php para videos y reels, post.php para publicaciones): se ve y se reproduce aquí mismo.
@@ -77,15 +78,13 @@ export default function Noticias() {
   useEffect(() => { cargar(); }, []);
 
   return (
-    <div className="pagina noticias-pagina">
+    <>
+    <PaginaHero foto="catedral" titulo="Noticias de Santa Marta"
+                texto="Lo último de Santa Marta Al Día. Los videos se reproducen aquí mismo; el contenido es de ese medio.">
+      {datos && <Fuente fuente={datos._fuente} />}
+    </PaginaHero>
+    <div className="pagina noticias-pagina superpuesta">
       <div className="noticias-columna">
-        <div className="pagina-cabecera lista-cabecera" style={{ padding: 0, alignItems: "flex-end" }}>
-          <div>
-            <h1>Noticias de Santa Marta</h1>
-            <p>Lo último de Santa Marta Al Día. Los videos se reproducen aquí mismo; el contenido es de ese medio.</p>
-          </div>
-          {datos && <Fuente fuente={datos._fuente} />}
-        </div>
         {error && <p className="error">{error}</p>}
         {!datos && !error && [0, 1].map((i) => <div key={i} className="esqueleto" style={{ height: 520, maxWidth: ANCHO, margin: "0 auto 16px" }} />)}
         {datos?.total === 0 && (
@@ -110,5 +109,6 @@ export default function Noticias() {
         </div>
       </aside>
     </div>
+    </>
   );
 }

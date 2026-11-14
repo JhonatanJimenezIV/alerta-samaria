@@ -8,6 +8,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { BARRIOS, CENTRO_SANTA_MARTA, NOMBRES_CATEGORIA, URGENCIA, barrioMasCercano } from "../constantes.js";
 import { CAPA_MAPA } from "../componentes/MapaReportes.jsx";
 import { useSesion } from "../sesion.jsx";
+import PaginaHero from "../componentes/PaginaHero.jsx";
 
 const iconoPin = L.divIcon({
   className: "",
@@ -79,16 +80,17 @@ export default function Reportar() {
   const campo = (k) => ({ value: form[k], onChange: (e) => setForm({ ...form, [k]: e.target.value }) });
   const barrios = useMemo(() => BARRIOS.map((b) => b.nombre), []);
 
-  if (!usuario) {
+  if (!usuario || usuario.rol !== "ciudadano") {
     return (
-      <div className="pagina estrecha">
-        <h1>Reportar un incidente</h1>
-        <p>Para reportar necesitas una cuenta. <Link to="/ingresar">Ingresa o regístrate</Link>.</p>
-      </div>
+      <PaginaHero foto="obras" pantalla titulo="Reporta lo que está pasando"
+                  texto={usuario ? "Las cuentas de entidad atienden reportes pero no los crean. Entra con una cuenta de ciudadano para reportar."
+                                 : "Para reportar necesitas una cuenta: así cada reporte tiene a un vecino verificado detrás. Ver el mapa no la requiere."}>
+        <div className="en-linea" style={{ marginTop: 24, flexWrap: "wrap" }}>
+          <Link to="/ingresar" className="boton atardecer"><MapPin size={18} weight="bold" />{usuario ? "Cambiar de cuenta" : "Ingresar o crear cuenta"}</Link>
+          <Link to="/mapa" className="boton boton-cristal">Ver el mapa en vivo</Link>
+        </div>
+      </PaginaHero>
     );
-  }
-  if (usuario.rol !== "ciudadano") {
-    return <div className="pagina estrecha"><h1>Reportar</h1><p>Las cuentas de entidad no crean reportes.</p></div>;
   }
 
   const enviar = async (e) => {
@@ -138,9 +140,12 @@ export default function Reportar() {
   };
 
   return (
-    <div className="pagina reportar">
+    <>
+    <PaginaHero foto="obras" compacta titulo="Reporta lo que está pasando"
+                texto="Tu reporte aparece en el mapa al instante y le llega a la entidad que lo tiene que resolver." />
+    <div className="pagina reportar superpuesta">
       <form className="caja" onSubmit={enviar}>
-        <h1>Reportar un incidente</h1>
+        <h2 className="heading-5" style={{ marginBottom: 16 }}>Qué viste y dónde</h2>
         {error && <p className="error">{error}</p>}
 
         <label>Categoría
@@ -215,7 +220,7 @@ export default function Reportar() {
                onChange={(e) => setForm({ ...form, contacto_autorizado: e.target.checked })} />
           Autorizo que la entidad responsable me contacte sobre este reporte</label>
 
-        <button className="boton reportar ancho" disabled={enviando}>{enviando ? (progreso || "Publicando…") : "Publicar reporte"}</button>
+        <button className="boton atardecer ancho" disabled={enviando}>{enviando ? (progreso || "Publicando…") : "Publicar reporte"}</button>
       </form>
 
       <div className="caja mapa-selector">
@@ -231,5 +236,6 @@ export default function Reportar() {
         </MapContainer>
       </div>
     </div>
+    </>
   );
 }

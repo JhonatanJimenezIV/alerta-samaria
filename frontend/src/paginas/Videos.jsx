@@ -6,6 +6,7 @@ import { haceCuanto } from "../constantes.js";
 import { Fuente, Urgencia } from "../componentes/Insignias.jsx";
 import { IconoCategoria } from "../iconos.jsx";
 import { Credito } from "../componentes/Galeria.jsx";
+import PaginaHero from "../componentes/PaginaHero.jsx";
 
 export default function Videos() {
   const [datos, setDatos] = useState(null);
@@ -13,14 +14,12 @@ export default function Videos() {
   useEffect(() => { api("/videos?limite=30").then(setDatos).catch((e) => setError(e.message)); }, []);
 
   return (
-    <div className="pagina">
-      <div className="pagina-cabecera lista-cabecera" style={{ padding: 0, alignItems: "flex-end" }}>
-        <div>
-          <h1>Videos de lo que pasa ahora</h1>
-          <p>Clips que los vecinos graban y adjuntan a sus reportes: un arroyo crecido, un incendio en los cerros, una vía cerrada.</p>
-        </div>
-        {datos && <Fuente fuente={datos._fuente} />}
-      </div>
+    <>
+    <PaginaHero foto="taganga" titulo="Videos de lo que pasa ahora"
+                texto="Clips que los vecinos graban y adjuntan a sus reportes: un arroyo crecido, un incendio en los cerros, una vía cerrada.">
+      {datos && <Fuente fuente={datos._fuente} />}
+    </PaginaHero>
+    <div className="pagina superpuesta">
       {error && <p className="error">{error}</p>}
       {!datos && !error && (
         <div className="videos-grid">{[0, 1, 2].map((i) => <div key={i} className="esqueleto" style={{ aspectRatio: "16 / 10" }} />)}</div>
@@ -31,7 +30,7 @@ export default function Videos() {
             <div className="icono-grande"><FilmStrip size={32} weight="bold" /></div>
             <h2>Todavía no hay videos</h2>
             <p>Cuando alguien adjunte un video a su reporte, aparecerá aquí. Puedes ser el primero.</p>
-            <Link to="/reportar" className="boton reportar"><Plus size={18} weight="bold" />Reportar con video</Link>
+            <Link to="/reportar" className="boton atardecer"><Plus size={18} weight="bold" />Reportar con video</Link>
           </div>
         </div>
       )}
@@ -57,5 +56,6 @@ export default function Videos() {
         </div>
       )}
     </div>
+    </>
   );
 }

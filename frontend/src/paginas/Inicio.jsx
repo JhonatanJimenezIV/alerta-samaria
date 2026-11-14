@@ -69,62 +69,10 @@ export default function Inicio() {
     );
   };
 
+  const total = datos.reportes.length;
   return (
-    <div className="inicio">
-      <section className="panel-lateral">
-        <div className="filtros">
-          <div className="modo">
-            <button className={modo === "feed" ? "activo" : ""} onClick={() => setModo("feed")}><Clock size={18} weight="bold" />En vivo</button>
-            <button className={modo === "cerca" ? "activo" : ""} onClick={activarCerca}><Crosshair size={18} weight="bold" />Cerca de mí</button>
-          </div>
-          {modo === "cerca" && (
-            <div className="radio">
-              Radio: <b>{km} km</b>
-              <input type="range" min="0.5" max="10" step="0.5" value={km} onChange={(e) => setKm(Number(e.target.value))} />
-              <span className="nota">Toca el mapa para buscar en otro punto</span>
-            </div>
-          )}
-          <div className="chips">
-            <button className={!categoria ? "chip activo" : "chip"} onClick={() => setCategoria("")}>Todas</button>
-            {categorias.map((c) => (
-              <button key={c.id} className={categoria === c.id ? "chip activo" : "chip"} onClick={() => setCategoria(c.id)}>
-                <IconoCategoria categoria={c.id} size={16} /> {c.nombre}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="lista-cabecera">
-          <span><b>{datos.reportes.length}</b> incidentes activos</span>
-          <Fuente fuente={datos._fuente} />
-        </div>
-        {error && <p className="error">{error}</p>}
-        <div className="lista">
-          {datos.reportes.map((r) => (
-            <TarjetaReporte key={r.id} reporte={r} seleccionado={r.id === seleccionado} onClick={() => seleccionar(r.id)} />
-          ))}
-          {!error && cargado && datos.reportes.length === 0 && <p className="vacio">No hay incidentes activos con este filtro.</p>}
-          {!cargado && !error && [0, 1, 2, 3].map((i) => <div key={i} className="esqueleto" style={{ height: 76, margin: "4px 0" }} />)}
-        </div>
-
-        {ranking?.ranking?.length > 0 && (
-          <div className="ranking">
-            <div className="lista-cabecera">
-              <b style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><Trophy size={18} weight="bold" />Barrios con más reportes esta semana</b>
-              <Fuente fuente={ranking._fuente} />
-            </div>
-            {ranking.ranking.slice(0, 5).map((b, i) => (
-              <div key={b.barrio} className="ranking-fila">
-                <span>{i + 1}. {b.barrio}</span>
-                <span className="barra" style={{ width: `${(b.total / ranking.ranking[0].total) * 100}%` }} />
-                <b>{b.total}</b>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="zona-mapa">
+    <div className="mapa-vivo">
+      <div className="mapa-fondo">
         <MapaReportes
           reportes={datos.reportes}
           seleccionado={seleccionado}
@@ -133,10 +81,66 @@ export default function Inicio() {
           circulo={modo === "cerca" && centro ? { centro, km } : null}
           onClicMapa={modo === "cerca" ? (p) => setCentro(p) : undefined}
         />
-        {seleccionado && (
-          <DetalleReporte id={seleccionado} onCerrar={() => setParams({})} onCambio={cargar} />
-        )}
+      </div>
+
+      <section className="panel-vivo" aria-label="Incidentes activos">
+        <header className="panel-vivo-cab">
+          <div className="panel-vivo-estado">
+            <span className="punto-vivo" aria-hidden="true" />
+            {modo === "cerca" ? `A ${km} km de ti` : "En vivo en Santa Marta"}
+            <Fuente fuente={datos._fuente} />
+          </div>
+          <h1>{cargado ? total : "…"} <span>{total === 1 ? "incidente activo" : "incidentes activos"}</span></h1>
+          <div className="modo oscuro">
+            <button className={modo === "feed" ? "activo" : ""} onClick={() => setModo("feed")}><Clock size={18} weight="bold" />Toda la ciudad</button>
+            <button className={modo === "cerca" ? "activo" : ""} onClick={activarCerca}><Crosshair size={18} weight="bold" />Cerca de mí</button>
+          </div>
+          {modo === "cerca" && (
+            <label className="radio">
+              Radio de búsqueda: <b>{km} km</b>
+              <input type="range" min="0.5" max="10" step="0.5" value={km} onChange={(e) => setKm(Number(e.target.value))} />
+              <span className="nota">Toca el mapa para buscar en otro punto</span>
+            </label>
+          )}
+          <div className="chips fila-scroll" role="group" aria-label="Filtrar por categoría">
+            <button className={!categoria ? "chip activo" : "chip"} onClick={() => setCategoria("")}>Todas</button>
+            {categorias.map((c) => (
+              <button key={c.id} className={categoria === c.id ? "chip activo" : "chip"} onClick={() => setCategoria(c.id)}>
+                <IconoCategoria categoria={c.id} size={16} />{c.nombre}
+              </button>
+            ))}
+          </div>
+        </header>
+
+        {error && <p className="error" style={{ margin: "0 16px" }}>{error}</p>}
+        <div className="lista">
+          {datos.reportes.map((r) => (
+            <TarjetaReporte key={r.id} reporte={r} seleccionado={r.id === seleccionado} onClick={() => seleccionar(r.id)} />
+          ))}
+          {!error && cargado && total === 0 && <p className="vacio">No hay incidentes activos con este filtro.</p>}
+          {!cargado && !error && [0, 1, 2, 3].map((i) => <div key={i} className="esqueleto" style={{ height: 72, margin: "4px 0" }} />)}
+        </div>
       </section>
+
+      {ranking?.ranking?.length > 0 && !seleccionado && (
+        <aside className="ranking-flotante" aria-label="Barrios con más reportes esta semana">
+          <div className="ranking-cab">
+            <b><Trophy size={18} weight="bold" />Barrios con más reportes</b>
+            <span className="nota">Esta semana</span>
+          </div>
+          {ranking.ranking.slice(0, 5).map((b, i) => (
+            <div key={b.barrio} className="ranking-fila">
+              <span>{i + 1}. {b.barrio}</span>
+              <span className="barra" style={{ width: `${(b.total / ranking.ranking[0].total) * 100}%` }} />
+              <b>{b.total}</b>
+            </div>
+          ))}
+        </aside>
+      )}
+
+      {seleccionado && (
+        <DetalleReporte id={seleccionado} onCerrar={() => setParams({})} onCambio={cargar} />
+      )}
     </div>
   );
 }

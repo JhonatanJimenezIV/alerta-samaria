@@ -12,6 +12,7 @@ import { Estado, Fuente, Urgencia } from "../componentes/Insignias.jsx";
 import { iconoReporte } from "../componentes/MapaReportes.jsx";
 import TarjetaReporte from "../componentes/TarjetaReporte.jsx";
 import { useSesion } from "../sesion.jsx";
+import PaginaHero from "../componentes/PaginaHero.jsx";
 
 const NOMBRES_CAT = { emergencias: "Emergencias", seguridad: "Seguridad", servicios: "Servicios públicos", vias: "Vías",
   transito: "Tránsito", ambiente: "Ambiente", animales: "Animales", playas: "Playas", otro: "Otro" };
@@ -159,18 +160,19 @@ export default function PanelEntidad() {
   if (usuario.rol !== "entidad") return <div className="pagina estrecha"><p>Esta sección es solo para entidades.</p></div>;
 
   return (
-    <div className="pagina panel-entidad">
-      <div className="lista-cabecera">
-        <h1 className="titulo-panel heading-4"><Buildings size={30} weight="bold" color="#2D6A4F" />{usuario.entidad || usuario.nombre}</h1>
-        <div className="modo">
-          <button className={vista === "reportes" ? "activo" : ""} onClick={() => setVista("reportes")}>Reportes</button>
+    <>
+    <PaginaHero foto="vistaSierra" compacta titulo={usuario.entidad || usuario.nombre}
+                texto={`Atiende: ${cats.map((c) => NOMBRES_CAT[c] || c).join(", ").toLowerCase()}.`}>
+      <div className="modo oscuro" style={{ maxWidth: 420, marginTop: 24 }}>
+          <button className={vista === "reportes" ? "activo" : ""} onClick={() => setVista("reportes")}><Buildings size={18} weight="bold" />Reportes</button>
           <button className={vista === "stats" ? "activo" : ""} onClick={() => setVista("stats")}><ChartBar size={18} weight="bold" />Estadísticas y riesgo</button>
-        </div>
       </div>
+    </PaginaHero>
+    <div className="pagina panel-entidad superpuesta">
 
       {vista === "stats" ? <Estadisticas /> : (
         <>
-          <div className="chips">
+          <div className="chips caja-chips">
             {cats.map((c) => (
               <button key={c} className={categoria === c ? "chip activo" : "chip"} onClick={() => setCategoria(c)}><IconoCategoria categoria={c} size={16} />{NOMBRES_CAT[c] || c}</button>
             ))}
@@ -182,7 +184,8 @@ export default function PanelEntidad() {
           {error && <p className="error">{error}</p>}
           <div className="entidad-cuerpo">
             <div className="lista">
-              <p className="nota">{datos?.total ?? 0} reportes, los más urgentes primero</p>
+              <p className="nota">{datos ? `${datos.total} reportes, los más urgentes primero` : "Cargando reportes…"}</p>
+              {!datos && !error && [0, 1, 2].map((i) => <div key={i} className="esqueleto" style={{ height: 72, margin: "4px 0" }} />)}
               {datos?.reportes.map((r) => (
                 <TarjetaReporte key={r.id} reporte={r} seleccionado={sel === r.id} onClick={() => setSel(r.id)} />
               ))}
@@ -193,5 +196,6 @@ export default function PanelEntidad() {
         </>
       )}
     </div>
+    </>
   );
 }
