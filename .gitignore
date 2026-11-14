@@ -1,0 +1,10 @@
+emulador-data/
+__pycache__/
+.pytest_cache/
+app/cdk.out/
+app/outputs.json
+frontend/node_modules/
+frontend/.env.local
+app/scripts/usuarios_demo.json
+.vscode/
+*.log

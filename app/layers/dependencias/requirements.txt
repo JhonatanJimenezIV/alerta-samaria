@@ -1,0 +1,4 @@
+# Dependencias de runtime de las Lambdas (mismas versiones que el repo base del curso)
+boto3==1.43.126
+botocore==1.43.126
+redis==8.1.0

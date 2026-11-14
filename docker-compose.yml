@@ -1,0 +1,89 @@
+# ═════════════════════════════════════════════════════════════════════
+# Alerta Samaria — entorno local de 3 contenedores
+#   emulador (LocalStack/MiniStack) + redis + cdk-dev
+# ═════════════════════════════════════════════════════════════════════
+services:
+
+  # ── CONTENEDOR 1: Emulador AWS ─────────────────────────────────────
+  emulador:
+    # Opción A — LocalStack 4.14 (última versión gratuita sin LOCALSTACK_AUTH_TOKEN)
+    image: localstack/localstack:4.14
+    # Opción B — MiniStack (más ligero):
+    # image: ministack/ministack
+    container_name: emulador
+    ports:
+      - "4566:4566"
+    environment:
+      # cloudformation, iam, s3, ssm, sts y logs los necesita cdklocal bootstrap/deploy
+      SERVICES: "apigateway,lambda,dynamodb,cloudformation,iam,s3,ssm,sts,logs"
+      DEBUG: "1"
+      DOCKER_HOST: unix:///var/run/docker.sock
+      # Las Lambdas corren en contenedores aparte: se conectan a esta red
+      # para poder resolver el host "redis". El nombre está fijado abajo
+      # (networks.default.name), así no depende del nombre de la carpeta.
+      LAMBDA_DOCKER_NETWORK: alerta-samaria-net
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./emulador-data:/var/lib/localstack
+    networks:
+      default:
+        # CDK sube los assets a S3 con estilo virtual-host (<bucket>.<host>)
+        aliases:
+          - s3.localhost.localstack.cloud
+          - cdk-hnb659fds-assets-000000000000-us-east-1.s3.localhost.localstack.cloud
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # ── CONTENEDOR 2: Redis ────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ── CONTENEDOR 3: Desarrollo CDK ───────────────────────────────────
+  cdk-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cdk-dev
+    volumes:
+      - ./app:/app
+      # deploy.sh escribe aquí frontend/.env.local con la URL del API
+      - ./frontend:/frontend
+    working_dir: /app
+    depends_on:
+      emulador:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      AWS_ENDPOINT_URL: http://emulador:4566
+      AWS_ENDPOINT_URL_S3: http://s3.localhost.localstack.cloud:4566
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+    stdin_open: true
+    tty: true
+    command: bash
+
+networks:
+  default:
+    name: alerta-samaria-net
+
+volumes:
+  redis_data:

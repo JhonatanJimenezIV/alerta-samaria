@@ -1,0 +1,4 @@
+# Los scripts deben conservar saltos de línea LF para que bash los ejecute en el contenedor
+*.sh text eol=lf
+*.py text eol=lf
+Dockerfile text eol=lf
