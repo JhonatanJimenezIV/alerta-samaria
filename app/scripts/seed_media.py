@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import sys
+import time
 import traceback
 import urllib.error
 import urllib.parse
@@ -66,6 +67,22 @@ def api(metodo: str, ruta: str, body: dict | None = None, usuario: str | None = 
         return json.loads(r.read())
 
 
+def descargar(url: str, intentos: int = 4) -> bytes:
+    """Wikimedia limita las descargas seguidas (HTTP 429): se espera y se reintenta."""
+    for intento in range(1, intentos + 1):
+        req = urllib.request.Request(url, headers={"User-Agent": "AlertaSamaria/1.0 (proyecto academico; Universidad del Magdalena)"})
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                return resp.read()
+        except urllib.error.HTTPError as e:
+            if e.code != 429 or intento == intentos:
+                raise
+            espera = int(e.headers.get("Retry-After") or 0) or 15 * intento
+            print(f"     Wikimedia pidió esperar (429). Reintento {intento + 1} de {intentos} en {espera} s…", flush=True)
+            time.sleep(espera)
+    raise RuntimeError("sin respuesta")
+
+
 def url_commons(nombre: str) -> str:
     n = nombre.replace(" ", "_")
     h = hashlib.md5(n.encode()).hexdigest()
@@ -106,9 +123,7 @@ for sub, archivo, autor_v, licencia in VIDEOS:
         continue
     try:
         print(f"   ↓ Descargando {archivo}…", flush=True)
-        req = urllib.request.Request(url_commons(archivo), headers={"User-Agent": "AlertaSamaria/1.0 (proyecto academico; Universidad del Magdalena)"})
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            datos = resp.read()
+        datos = descargar(url_commons(archivo))
         pedido = api("POST", f"/reportes/{rid}/media", {"content_type": "video/webm", "tamano": len(datos)}, usuario=autor)
         clave = f"reportes/{rid}/{pedido['id']}.webm"
         s3.put_object(Bucket=bucket, Key=clave, Body=datos, ContentType="video/webm")
@@ -121,8 +136,11 @@ for sub, archivo, autor_v, licencia in VIDEOS:
         api("POST", f"/reportes/{rid}/media/{pedido['id']}/confirmar", {}, usuario=autor)
         subidos += 1
         print(f"   ✔ {len(datos) / 1e6:.1f} MB adjuntado al reporte de '{sub}' ({rep['barrio']})")
+        time.sleep(5)  # pausa entre descargas para no disparar el límite de Wikimedia
     except urllib.error.HTTPError as e:
-        print(f"   ⚠ {archivo}: HTTP {e.code} {e.read().decode(errors='ignore')[:160]}")
+        cuerpo = e.read().decode(errors="ignore")
+        detalle = "límite de descargas de Wikimedia; vuelve a correr el script en unos minutos" if e.code == 429 else cuerpo[:160]
+        print(f"   ⚠ {archivo}: HTTP {e.code} ({detalle})")
     except Exception as e:  # noqa: BLE001
         print(f"   ⚠ {archivo}: {type(e).__name__}: {e}")
         traceback.print_exc(limit=1)
