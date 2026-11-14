@@ -27,6 +27,11 @@ export async function api(ruta, { metodo = "GET", body, usuarioId } = {}) {
     throw new ErrorApi(0, "No hay conexión con el API. ¿Está corriendo el emulador y el deploy?");
   }
   const texto = await resp.text();
+  // Si el emulador se reinició, el api-id ya no existe: LocalStack responde con XML de S3
+  // ("NoSuchBucket ... restapis") o con "does not correspond to a deployed API".
+  if (/NoSuchBucket|does not correspond to a deployed API/.test(texto)) {
+    throw new ErrorApi(503, "El API no está desplegado en el emulador (suele pasar después de reiniciar Docker). En cdk-dev ejecuta bash scripts/deploy.sh y python scripts/seed.py, y luego reinicia npm run dev.");
+  }
   let datos = {};
   try {
     datos = texto ? JSON.parse(texto) : {};
