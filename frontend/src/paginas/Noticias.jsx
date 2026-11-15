@@ -1,4 +1,4 @@
-import { ArrowSquareOut, Newspaper, Plus } from "@phosphor-icons/react";
+import { ArrowSquareOut, Newspaper, Plus, FacebookLogo, Globe } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { api } from "../api.js";
 import { haceCuanto } from "../constantes.js";
@@ -6,9 +6,6 @@ import { Fuente } from "../componentes/Insignias.jsx";
 import { useSesion } from "../sesion.jsx";
 import PaginaHero from "../componentes/PaginaHero.jsx";
 
-// Noticias de Santa Marta Al Día. Cada publicación se muestra con el plugin oficial de Facebook
-// (video.php para videos y reels, post.php para publicaciones): se ve y se reproduce aquí mismo.
-// En la base de datos solo se guarda el enlace; el contenido sigue siendo del medio.
 const PAGINA = "https://www.facebook.com/SantaMartaAD";
 const ANCHO = 420;
 
@@ -18,26 +15,38 @@ function Publicacion({ n }) {
   const plugin = esVideo ? "video" : "post";
   const src = `https://www.facebook.com/plugins/${plugin}.php?${new URLSearchParams({ href: n.url, show_text: "true", width: String(ANCHO) })}`;
   return (
-    <article className="noticia">
-      <header className="noticia-cab">
-        <span className="noticia-medio">SM</span>
-        <div>
-          <b>{n.fuente || "Santa Marta Al Día"}</b>
-          <span className="nota">{esVideo ? (esReel ? "Reel" : "Video") : "Publicación"}, agregada {haceCuanto(n.creado_en)}</span>
+    <article className="not-tarjeta">
+      <div className="not-embed">
+        <iframe
+          title={`Publicación de ${n.fuente || "Santa Marta Al Día"}`}
+          src={src}
+          width={ANCHO}
+          height={esReel ? 900 : esVideo ? 520 : 640}
+          loading="lazy"
+          style={{ border: 0, overflow: "hidden", maxWidth: "100%" }}
+          scrolling="no"
+          allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+          allowFullScreen
+        />
+      </div>
+      <div className="not-lado">
+        <div className="not-cab">
+          <span className="not-medio-icono"><FacebookLogo size={20} weight="fill" /></span>
+          <div>
+            <b>{n.fuente || "Santa Marta Al Día"}</b>
+            <span className="not-tipo">{esVideo ? (esReel ? "Reel" : "Video") : "Publicación"}</span>
+          </div>
         </div>
-        <a href={n.url} target="_blank" rel="noreferrer" className="enlace" aria-label="Abrir en Facebook"><ArrowSquareOut size={18} weight="bold" /></a>
-      </header>
-      <iframe
-        title={`Publicación de ${n.fuente || "Santa Marta Al Día"}`}
-        src={src}
-        width={ANCHO}
-        height={esReel ? 900 : esVideo ? 520 : 640}
-        loading="lazy"
-        style={{ border: 0, overflow: "hidden", maxWidth: "100%" }}
-        scrolling="no"
-        allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
-        allowFullScreen
-      />
+        <p className="not-fecha">Agregada {haceCuanto(n.creado_en)}</p>
+        <div className="not-comentarios">
+          <h4>Sobre esta publicación</h4>
+          <p>Esta noticia proviene de <strong>Santa Marta Al Día</strong>, medio de comunicación web de Santa Marta. El contenido y los comentarios se muestran con los plugins oficiales de Facebook.</p>
+          <p>Puedes interactuar con la publicación directamente: darle me gusta, comentar o compartirla desde aquí.</p>
+        </div>
+        <a href={n.url} target="_blank" rel="noreferrer" className="boton pequeno not-btn-fb">
+          <ArrowSquareOut size={16} weight="bold" />Abrir en Facebook
+        </a>
+      </div>
     </article>
   );
 }
@@ -58,12 +67,12 @@ function Agregar({ alAgregar }) {
     }
   };
   return (
-    <form className="caja" onSubmit={enviar}>
-      <h2>Agregar una publicación</h2>
-      <p className="nota">Pega el enlace de una publicación, video o reel de la página de Facebook del medio.</p>
+    <form className="not-agregar" onSubmit={enviar}>
+      <h3>Agregar una publicación</h3>
+      <p>Pega el enlace de una publicación, video o reel de la página de Facebook del medio.</p>
       <div className="en-linea" style={{ marginTop: 12 }}>
         <input required placeholder="https://www.facebook.com/reel/..." value={url} onChange={(e) => setUrl(e.target.value)} />
-        <button className="boton primario"><Plus size={18} weight="bold" />Agregar</button>
+        <button className="boton primario pequeno"><Plus size={16} weight="bold" />Agregar</button>
       </div>
       {estado && <p className="nota destacada" style={{ marginTop: 12 }}>{estado}</p>}
     </form>
@@ -79,35 +88,42 @@ export default function Noticias() {
 
   return (
     <>
-    <PaginaHero foto="catedral" titulo="Noticias de Santa Marta"
-                texto="Lo último de Santa Marta Al Día. Los videos se reproducen aquí mismo; el contenido es de ese medio.">
+    <PaginaHero foto="catedral" titulo="Noticias de Santa Marta" compacta
+                texto="Lo último de Santa Marta Al Día. Los videos y publicaciones se reproducen aquí mismo.">
       {datos && <Fuente fuente={datos._fuente} />}
     </PaginaHero>
-    <div className="pagina noticias-pagina superpuesta">
-      <div className="noticias-columna">
-        {error && <p className="error">{error}</p>}
-        {!datos && !error && [0, 1].map((i) => <div key={i} className="esqueleto" style={{ height: 520, maxWidth: ANCHO, margin: "0 auto 16px" }} />)}
-        {datos?.total === 0 && (
-          <div className="caja estado-vacio">
+    <div className="not-seccion">
+      {/* Barra lateral fija */}
+      <aside className="not-sidebar">
+        <div className="not-sidebar-card">
+          <div className="not-sidebar-medio">
+            <span className="not-medio-grande"><Globe size={28} weight="bold" /></span>
             <div>
-              <div className="icono-grande"><Newspaper size={32} weight="bold" /></div>
-              <h2>Todavía no hay noticias</h2>
-              <p>Corre <code>python scripts/seed.py</code> o agrega una publicación desde una cuenta de entidad.</p>
+              <h3>Santa Marta Al Día</h3>
+              <p>Medio de comunicación web de Santa Marta</p>
             </div>
           </div>
-        )}
-        <div className="noticias-lista">
-          {datos?.noticias.map((n) => <Publicacion key={n.id} n={n} />)}
+          <p className="not-sidebar-desc">Las publicaciones se muestran con los plugins oficiales de Facebook. El contenido es de ese medio.</p>
+          <a href={PAGINA} target="_blank" rel="noreferrer" className="boton primario pequeno not-sidebar-btn">
+            <ArrowSquareOut size={16} weight="bold" />Ver la página completa
+          </a>
         </div>
-      </div>
-      <aside className="noticias-lado">
         {usuario?.rol === "entidad" && <Agregar alAgregar={cargar} />}
-        <div className="caja">
-          <h2>Santa Marta Al Día</h2>
-          <p className="nota">Medio de comunicación web de Santa Marta. Las publicaciones se muestran con los plugins oficiales de Facebook.</p>
-          <a href={PAGINA} target="_blank" rel="noreferrer" className="boton" style={{ marginTop: 12 }}><ArrowSquareOut size={18} weight="bold" />Ver la página completa</a>
-        </div>
       </aside>
+
+      {/* Feed de noticias */}
+      <div className="not-feed">
+        {error && <p className="error">{error}</p>}
+        {!datos && !error && [0, 1].map((i) => <div key={i} className="esqueleto" style={{ height: 480, borderRadius: 16 }} />)}
+        {datos?.total === 0 && (
+          <div className="not-vacio">
+            <div className="icono-grande"><Newspaper size={32} weight="bold" /></div>
+            <h2>Todavía no hay noticias</h2>
+            <p>Corre <code>python scripts/seed.py</code> o agrega una publicación desde una cuenta de entidad.</p>
+          </div>
+        )}
+        {datos?.noticias.map((n) => <Publicacion key={n.id} n={n} />)}
+      </div>
     </div>
     </>
   );

@@ -122,7 +122,7 @@ alerta-samaria/
     │   ├── health.py
     │   └── comun/            # db, cache (Redis), catálogo, modelo (privacidad), estados, http
     ├── scripts/              # deploy.sh, post_deploy.py, seed.py
-    └── tests/                # pytest + moto + fakeredis (29 tests)
+    └── tests/                # pytest + moto + fakeredis (36 tests)
 ```
 
 ## Decisiones clave (resumen para la sustentación)

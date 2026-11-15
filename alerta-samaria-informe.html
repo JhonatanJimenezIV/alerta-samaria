@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alerta Samaria — Informe Técnico Interactivo</title>
+<style>
+:root {
+  --tinta: #12263A; --bahia: #0B4F6C; --sierra: #2D6A4F; --oro: #E0A526;
+  --atardecer: #E8553A; --fondo: #F4F7F8; --card: #fff; --line: #d5deee;
+  --mut: #667394; --ok: #16a34a; --bad: #e11d48; --cache-c: #f59e0b;
+  --db-c: #0ea5a4; --lambda-c: #7c3aed; --s3-c: #ec4899; --redis-c: #ef4444;
+  --api-c: #3b82f6;
+}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --fondo:#0c1220;--card:#151e30;--tinta:#e6ecfa;--line:#2c3856;--mut:#9aa7c7;
+}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--fondo);color:var(--tinta);font-family:'Manrope',system-ui,-apple-system,sans-serif;line-height:1.55}
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+
+/* ── NAV ─── */
+nav{position:sticky;top:0;z-index:100;background:var(--tinta);color:#fff;padding:0 24px;display:flex;align-items:center;gap:20px;height:56px;box-shadow:0 2px 12px #0003}
+nav h1{font-size:1.1rem;font-weight:800;white-space:nowrap}
+nav .tabs{display:flex;gap:4px;overflow-x:auto;flex:1}
+nav .tabs button{border:0;background:transparent;color:#fff9;padding:8px 14px;font-size:.85rem;font-weight:600;cursor:pointer;border-radius:8px 8px 0 0;white-space:nowrap;transition:.2s}
+nav .tabs button:hover{background:#ffffff15}
+nav .tabs button.on{background:var(--bahia);color:#fff}
+
+/* ── SECTIONS ─── */
+.panel{display:none;max-width:1320px;margin:0 auto;padding:24px 20px 80px}
+.panel.active{display:block}
+h2{font-size:1.6rem;font-weight:800;margin:0 0 8px;color:var(--bahia)}
+h3{font-size:1.15rem;font-weight:700;margin:18px 0 8px;color:var(--tinta)}
+p{margin:0 0 12px;color:var(--mut);max-width:720px}
+.subtitle{font-size:1rem;color:var(--mut);margin-bottom:24px}
+
+/* ── DIAGRAM CARDS ─── */
+.arch-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin:20px 0}
+.arch-card{background:var(--card);border:2px solid var(--line);border-radius:16px;padding:20px;transition:.3s}
+.arch-card:hover{transform:translateY(-3px);box-shadow:0 8px 24px #0001}
+.arch-card .icon{font-size:2.4rem;margin-bottom:8px}
+.arch-card h4{font-size:1rem;font-weight:700;margin-bottom:4px}
+.arch-card p{font-size:.88rem;margin:0}
+.arch-card .tag{display:inline-block;font-size:.75rem;font-weight:700;padding:2px 8px;border-radius:12px;margin-top:8px}
+
+/* ── DOCKER DIAGRAM ─── */
+.docker-viz{display:flex;flex-wrap:wrap;gap:16px;justify-content:center;margin:24px 0}
+.container-box{background:var(--card);border:3px solid var(--line);border-radius:20px;padding:20px;min-width:260px;flex:1;max-width:380px;text-align:center;position:relative;transition:.4s}
+.container-box.active{border-color:var(--bahia);box-shadow:0 0 0 4px #0B4F6C33}
+.container-box .cname{font-weight:800;font-size:1.1rem;margin-bottom:4px}
+.container-box .cimage{font-size:.82rem;color:var(--mut);font-family:'JetBrains Mono',monospace}
+.container-box .cport{font-size:.8rem;background:var(--bahia);color:#fff;padding:2px 10px;border-radius:20px;display:inline-block;margin-top:8px}
+.arrow-h{display:flex;align-items:center;font-size:1.5rem;color:var(--bahia);font-weight:800;transition:.4s}
+.arrow-h.pulse{animation:pulseArrow .6s ease}
+@keyframes pulseArrow{0%{transform:scale(1)}50%{transform:scale(1.4);color:var(--oro)}100%{transform:scale(1)}}
+
+/* ── TABLE DESIGN ─── */
+.dynamo-table{width:100%;border-collapse:separate;border-spacing:0;border:2px solid var(--line);border-radius:12px;overflow:hidden;margin:16px 0;font-size:.85rem}
+.dynamo-table th{background:var(--tinta);color:#fff;padding:10px 12px;text-align:left;font-weight:700}
+.dynamo-table td{padding:8px 12px;border-bottom:1px solid var(--line);font-family:'JetBrains Mono',monospace;font-size:.8rem}
+.dynamo-table tr:last-child td{border-bottom:0}
+.dynamo-table tr{transition:.3s}
+.dynamo-table tr.hl-row{background:#0B4F6C15}
+.pk{color:var(--bahia);font-weight:700}
+.sk{color:var(--sierra);font-weight:600}
+
+/* ── FLOW DEMO ─── */
+.flow-container{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);gap:20px;margin:20px 0}
+@media(max-width:900px){.flow-container{grid-template-columns:1fr}}
+.flow-left{position:relative}
+.flow-right{position:sticky;top:72px;align-self:start}
+
+.flow-nodes{display:flex;flex-direction:column;gap:12px}
+.flow-node{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--card);border:2px solid var(--line);border-radius:14px;cursor:pointer;transition:.3s}
+.flow-node:hover{border-color:var(--bahia)}
+.flow-node.done{border-color:var(--ok);background:#16a34a08}
+.flow-node.active{border-color:var(--oro);background:#f59e0b08;box-shadow:0 0 0 3px #f59e0b22}
+.flow-node .step-num{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.85rem;flex-shrink:0;transition:.3s}
+.flow-node.done .step-num{background:var(--ok);color:#fff}
+.flow-node.active .step-num{background:var(--oro);color:#fff}
+.flow-node .step-num{background:var(--line);color:var(--mut)}
+.flow-node .step-text h5{font-size:.92rem;font-weight:700;margin-bottom:2px}
+.flow-node .step-text p{font-size:.82rem;margin:0;color:var(--mut)}
+
+.code-panel{background:#0f172a;border-radius:16px;overflow:hidden}
+.code-panel .cp-header{padding:10px 16px;background:#1e293b;display:flex;align-items:center;gap:8px}
+.code-panel .cp-header .dot{width:10px;height:10px;border-radius:50%}
+.code-panel .cp-header span{font-size:.82rem;color:#94a3b8;font-family:'JetBrains Mono',monospace}
+.code-panel .cp-body{padding:12px 0;max-height:420px;overflow-y:auto}
+.code-line{font-family:'JetBrains Mono',monospace;font-size:.78rem;color:#cbd5e1;padding:2px 16px;white-space:pre;border-left:3px solid transparent;transition:.3s}
+.code-line.hl{background:#854d0e55;border-left-color:#fbbf24;color:#fef3c7}
+.code-line .cm{color:#64748b}
+.code-line .kw{color:#c084fc}
+.code-line .fn{color:#67e8f9}
+.code-line .st{color:#86efac}
+.code-line .num{color:#fbbf24}
+
+.state-panel{background:var(--card);border:2px solid var(--line);border-radius:14px;padding:16px;margin-top:12px}
+.state-panel h4{font-size:.9rem;font-weight:700;margin-bottom:8px}
+.state-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.state-item{background:var(--fondo);border-radius:10px;padding:10px;text-align:center}
+.state-item .si-label{font-size:.72rem;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.state-item .si-val{font-size:1.1rem;font-weight:800;margin-top:2px;font-family:'JetBrains Mono',monospace;transition:.3s}
+
+.flow-btns{display:flex;gap:10px;margin:16px 0;flex-wrap:wrap}
+.flow-btns button{border:0;border-radius:12px;padding:10px 20px;font-size:.92rem;font-weight:700;color:#fff;cursor:pointer;transition:.2s}
+.flow-btns button:hover{transform:translateY(-1px)}
+.flow-btns button:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.btn-next{background:var(--bahia)}
+.btn-reset{background:var(--mut)}
+.btn-auto{background:var(--sierra)}
+
+/* ── REDIS VIZ ─── */
+.redis-structures{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin:20px 0}
+.redis-box{background:var(--card);border:2px solid var(--line);border-radius:16px;overflow:hidden}
+.redis-box .rb-head{padding:10px 16px;background:var(--atardecer);color:#fff;font-weight:700;font-size:.9rem;display:flex;align-items:center;gap:8px}
+.redis-box .rb-body{padding:12px 16px;font-family:'JetBrains Mono',monospace;font-size:.8rem}
+.redis-entry{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--line)}
+.redis-entry:last-child{border:0}
+.redis-key{color:var(--atardecer);font-weight:600}
+.redis-val{color:var(--mut)}
+.redis-score{color:var(--sierra);font-weight:600}
+
+/* ── LOG ─── */
+.log-box{background:var(--card);border:2px solid var(--line);border-radius:14px;max-height:260px;overflow-y:auto;margin-top:12px}
+.log-entry{padding:8px 14px;border-bottom:1px solid var(--line);font-size:.85rem;display:flex;gap:8px}
+.log-entry:last-child{border:0}
+.log-tag{font-weight:700;min-width:80px;flex-shrink:0}
+.log-tag.t-dynamo{color:var(--db-c)}
+.log-tag.t-redis{color:var(--atardecer)}
+.log-tag.t-lambda{color:var(--lambda-c)}
+.log-tag.t-s3{color:var(--s3-c)}
+.log-tag.t-api{color:var(--api-c)}
+.log-tag.t-ok{color:var(--ok)}
+.log-tag.t-error{color:var(--bad)}
+
+/* ── CACHE PATTERN ─── */
+.pattern-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin:20px 0}
+.pattern-card{background:var(--card);border:2px solid var(--line);border-radius:14px;padding:16px;transition:.3s}
+.pattern-card:hover{border-color:var(--bahia)}
+.pattern-card h4{font-weight:700;font-size:.95rem;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.pattern-card p{font-size:.82rem;margin:0}
+.pattern-card .p-icon{font-size:1.3rem}
+
+/* ── ANIMATIONS ─── */
+@keyframes fadeInUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideRight{from{opacity:0;transform:translateX(-30px)}to{opacity:1;transform:translateX(0)}}
+@keyframes glow{0%{box-shadow:0 0 0 0 var(--bahia)}50%{box-shadow:0 0 0 8px transparent}100%{box-shadow:0 0 0 0 transparent}}
+.animate-in{animation:fadeInUp .5s ease both}
+.flash-glow{animation:glow .8s ease}
+
+/* ── RESPONSIVE ─── */
+@media(max-width:640px){
+  nav{flex-wrap:wrap;height:auto;padding:10px 16px}
+  nav .tabs{order:2;width:100%;padding-top:8px}
+  .docker-viz{flex-direction:column}
+  .state-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <h1>🌊 Alerta Samaria</h1>
+  <div class="tabs" id="navTabs">
+    <button class="on" data-tab="arch">Arquitectura</button>
+    <button data-tab="docker">Docker</button>
+    <button data-tab="tabla">Single Table</button>
+    <button data-tab="redis">Redis</button>
+    <button data-tab="flujo-registro">Flujo: Registro</button>
+    <button data-tab="flujo-reporte">Flujo: Reporte</button>
+    <button data-tab="flujo-video">Flujo: Video</button>
+    <button data-tab="flujo-confirmar">Flujo: Confirmar</button>
+    <button data-tab="cache">Cache Patterns</button>
+    <button data-tab="degradado">Modo Degradado</button>
+    <button data-tab="tests">Tests</button>
+  </div>
+</nav>
+
+<!-- ═══════════ 1. ARQUITECTURA ═══════════ -->
+<div class="panel active" id="p-arch">
+  <h2>Arquitectura General</h2>
+  <p class="subtitle">Plataforma serverless de reportes ciudadanos para Santa Marta. Stack obligatorio: DynamoDB + Redis + Python + CDK + API Gateway + Lambda + Docker Compose con LocalStack.</p>
+
+  <div class="arch-grid">
+    <div class="arch-card" style="border-left:4px solid var(--api-c)">
+      <div class="icon">🌐</div>
+      <h4>Frontend — React + Vite</h4>
+      <p>SPA con mapa Leaflet (OSM), embeds de Facebook para noticias, sección de videos, panel de entidad. Proxy <code>/api</code> al API Gateway del emulador.</p>
+      <span class="tag" style="background:var(--api-c);color:#fff">localhost:5173</span>
+    </div>
+    <div class="arch-card" style="border-left:4px solid var(--lambda-c)">
+      <div class="icon">⚡</div>
+      <h4>API Gateway + 4 Lambdas</h4>
+      <p>19 endpoints, 25 patrones de acceso. Autenticación simplificada con header <code>X-Usuario-Id</code>. CORS habilitado.</p>
+      <span class="tag" style="background:var(--lambda-c);color:#fff">Python 3.11</span>
+    </div>
+    <div class="arch-card" style="border-left:4px solid var(--db-c)">
+      <div class="icon">🗄️</div>
+      <h4>DynamoDB — Tabla Única</h4>
+      <p>Single Table Design con PK/SK, 4 GSI, TTL de 48h. Fuente de verdad. Sin Scan, solo Query y GetItem. TransactWriteItems para invariantes.</p>
+      <span class="tag" style="background:var(--db-c);color:#fff">Fuente de verdad</span>
+    </div>
+    <div class="arch-card" style="border-left:4px solid var(--redis-c)">
+      <div class="icon">⚡</div>
+      <h4>Redis 7</h4>
+      <p>Feed (Sorted Set), cercanía (GEO), ranking (ZINCRBY), rate limiting (INCR+EXPIRE), Cache-Aside y Write-Through. Modo degradado si cae.</p>
+      <span class="tag" style="background:var(--redis-c);color:#fff">Cache + índices</span>
+    </div>
+    <div class="arch-card" style="border-left:4px solid var(--s3-c)">
+      <div class="icon">📦</div>
+      <h4>S3 — Fotos y Videos</h4>
+      <p>El navegador sube directo con URLs prefirmadas (PUT). La Lambda nunca toca el archivo. HeadObject para confirmar la subida.</p>
+      <span class="tag" style="background:var(--s3-c);color:#fff">Subida directa</span>
+    </div>
+    <div class="arch-card" style="border-left:4px solid var(--sierra)">
+      <div class="icon">🧪</div>
+      <h4>Tests — pytest + moto + fakeredis</h4>
+      <p>36 tests: unitarios por módulo + flujo completo de integración. Sin emulador: moto simula DynamoDB, fakeredis simula Redis.</p>
+      <span class="tag" style="background:var(--sierra);color:#fff">36 tests · 7s</span>
+    </div>
+  </div>
+
+  <h3>Flujo general de una solicitud</h3>
+  <div class="docker-viz" id="archFlow">
+    <div class="container-box" id="af-browser"><div class="icon" style="font-size:2rem">🖥️</div><div class="cname">Navegador</div><div class="cimage">React + Vite</div></div>
+    <div class="arrow-h" id="af-a1">→</div>
+    <div class="container-box" id="af-apigw"><div class="icon" style="font-size:2rem">🚪</div><div class="cname">API Gateway</div><div class="cimage">REST proxy</div></div>
+    <div class="arrow-h" id="af-a2">→</div>
+    <div class="container-box" id="af-lambda"><div class="icon" style="font-size:2rem">⚡</div><div class="cname">Lambda</div><div class="cimage">Python handler</div></div>
+    <div class="arrow-h" id="af-a3">⇄</div>
+    <div class="container-box" id="af-redis"><div class="icon" style="font-size:2rem;color:var(--redis-c)">⚡</div><div class="cname">Redis</div><div class="cimage">Cache + índices</div></div>
+    <div class="arrow-h" id="af-a4">⇄</div>
+    <div class="container-box" id="af-dynamo"><div class="icon" style="font-size:2rem;color:var(--db-c)">🗄️</div><div class="cname">DynamoDB</div><div class="cimage">Fuente de verdad</div></div>
+  </div>
+</div>
+
+<!-- ═══════════ 2. DOCKER ═══════════ -->
+<div class="panel" id="p-docker">
+  <h2>Docker Compose — 3 Contenedores</h2>
+  <p class="subtitle">Red fija <code>alerta-samaria-net</code> para que las Lambdas del emulador puedan resolver el host "redis".</p>
+
+  <div class="docker-viz">
+    <div class="container-box" id="dc-emu" style="border-color:var(--db-c)">
+      <div class="icon" style="font-size:2.5rem">☁️</div>
+      <div class="cname">emulador</div>
+      <div class="cimage">localstack/localstack:4.14</div>
+      <div class="cport">:4566</div>
+      <p style="font-size:.8rem;margin-top:8px;color:var(--mut)">Emula: API Gateway, Lambda, DynamoDB, S3, CloudFormation, IAM, SSM, STS, Logs</p>
+      <p style="font-size:.78rem;color:var(--mut)">Healthcheck: <code>curl localhost:4566/_localstack/health</code></p>
+    </div>
+    <div class="arrow-h">⇄</div>
+    <div class="container-box" id="dc-redis" style="border-color:var(--redis-c)">
+      <div class="icon" style="font-size:2.5rem">⚡</div>
+      <div class="cname">redis</div>
+      <div class="cimage">redis:7-alpine</div>
+      <div class="cport">:6379</div>
+      <p style="font-size:.8rem;margin-top:8px;color:var(--mut)">AOF persistente (appendonly yes). Healthcheck con <code>redis-cli ping</code>.</p>
+    </div>
+    <div class="arrow-h">⇄</div>
+    <div class="container-box" id="dc-cdk" style="border-color:var(--sierra)">
+      <div class="icon" style="font-size:2.5rem">🛠️</div>
+      <div class="cname">cdk-dev</div>
+      <div class="cimage">Dockerfile propio</div>
+      <div class="cport">bash</div>
+      <p style="font-size:.8rem;margin-top:8px;color:var(--mut)">Monta <code>./app</code> y <code>./frontend</code>. Aquí se ejecuta <code>deploy.sh</code>, <code>seed.py</code> y <code>pytest</code>.</p>
+    </div>
+  </div>
+
+  <h3>Secuencia de arranque</h3>
+  <div class="flow-nodes" id="dockerSteps">
+    <div class="flow-node" data-i="0"><div class="step-num">1</div><div class="step-text"><h5>docker compose up -d --build</h5><p>Construye la imagen de cdk-dev y levanta los 3 contenedores. El emulador y Redis tienen healthcheck.</p></div></div>
+    <div class="flow-node" data-i="1"><div class="step-num">2</div><div class="step-text"><h5>docker compose exec cdk-dev bash</h5><p>Entras al contenedor de desarrollo. Aquí vive tu código, CDK y los scripts.</p></div></div>
+    <div class="flow-node" data-i="2"><div class="step-num">3</div><div class="step-text"><h5>bash scripts/deploy.sh</h5><p>cdklocal bootstrap → deploy → escribe la URL del API en frontend/.env.local</p></div></div>
+    <div class="flow-node" data-i="3"><div class="step-num">4</div><div class="step-text"><h5>python scripts/seed.py</h5><p>Crea usuarios demo, reportes, videos de Wikimedia y noticias de Facebook en DynamoDB + Redis.</p></div></div>
+    <div class="flow-node" data-i="4"><div class="step-num">5</div><div class="step-text"><h5>npm run dev (en otra terminal)</h5><p>Vite sirve el frontend en localhost:5173 con proxy /api → emulador:4566</p></div></div>
+  </div>
+  <div class="flow-btns"><button class="btn-next" onclick="animateDockerSteps()">▶ Animar secuencia</button></div>
+</div>
+
+<!-- ═══════════ 3. SINGLE TABLE ═══════════ -->
+<div class="panel" id="p-tabla">
+  <h2>Single Table Design</h2>
+  <p class="subtitle">Una sola tabla DynamoDB con PK/SK polimórfico. Cada tipo de ítem comparte la tabla pero se identifica por su patrón de claves. Sin Scan, sin JOIN: un solo Query trae todo lo que necesitas.</p>
+
+  <h3>Modelo de datos</h3>
+  <table class="dynamo-table" id="stTable">
+    <thead><tr><th>PK</th><th>SK</th><th>Tipo</th><th>Datos clave</th><th>GSI usados</th></tr></thead>
+    <tbody>
+      <tr data-type="reporte"><td class="pk">REP#&lt;id&gt;</td><td class="sk">META</td><td>REPORTE</td><td>categoria, subtipo, lat/lng, barrio, estado, confirmaciones, ttl</td><td>GSI1, GSI2, GSI3, GSI4</td></tr>
+      <tr data-type="reporte"><td class="pk">REP#&lt;id&gt;</td><td class="sk">EVT#&lt;fecha&gt;#&lt;estado&gt;</td><td>EVENTO</td><td>estado_anterior → estado_nuevo, actor_id, nota</td><td>—</td></tr>
+      <tr data-type="reporte"><td class="pk">REP#&lt;id&gt;</td><td class="sk">CONF#&lt;usuario&gt;</td><td>CONFIRMACIÓN</td><td>creado_en (un voto por usuario, Put condicional)</td><td>—</td></tr>
+      <tr data-type="media"><td class="pk">REP#&lt;id&gt;</td><td class="sk">MEDIA#&lt;mid&gt;</td><td>MEDIA</td><td>clase (foto|video), clave S3, estado, content_type</td><td>GSI4</td></tr>
+      <tr data-type="usuario"><td class="pk">USR#&lt;id&gt;</td><td class="sk">PERFIL</td><td>USUARIO</td><td>nombre, email, rol, barrio, confianza, consentimiento</td><td>—</td></tr>
+      <tr data-type="usuario"><td class="pk">EMAIL#&lt;correo&gt;</td><td class="sk">USUARIO</td><td>EMAIL</td><td>usuario_id (candado de correo único, TransactWriteItems)</td><td>—</td></tr>
+      <tr data-type="stat"><td class="pk">STAT#DIA#&lt;fecha&gt;</td><td class="sk">ZONA#&lt;barrio&gt;#CAT#&lt;cat&gt;#&lt;sub&gt;</td><td>ESTADÍSTICA</td><td>total (contador atómico ADD), barrio, categoria</td><td>—</td></tr>
+      <tr data-type="stat"><td class="pk">STAT#ZONA#&lt;barrio&gt;</td><td class="sk">&lt;fecha&gt;#&lt;cat&gt;#&lt;sub&gt;</td><td>ESTADÍSTICA</td><td>Mismos datos, particionado por zona (AP17)</td><td>—</td></tr>
+      <tr data-type="config"><td class="pk">CONFIG</td><td class="sk">CATEGORIAS</td><td>CATÁLOGO</td><td>categorías y subtipos con urgencia y horas activas</td><td>—</td></tr>
+      <tr data-type="noticias"><td class="pk">NOTICIAS</td><td class="sk">&lt;fecha&gt;#&lt;id&gt;</td><td>NOTICIA</td><td>url Facebook, clase (video|post), fuente, título</td><td>—</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Índices Secundarios Globales (GSI)</h3>
+  <table class="dynamo-table">
+    <thead><tr><th>GSI</th><th>PK</th><th>SK</th><th>Patrón de acceso</th><th>Ejemplo de uso</th></tr></thead>
+    <tbody>
+      <tr><td style="font-weight:700">GSI1</td><td class="pk">USR#&lt;id&gt;</td><td class="sk">&lt;fecha&gt;#&lt;rid&gt;</td><td>AP11: Mis reportes</td><td>Ordenados por fecha, más reciente primero</td></tr>
+      <tr><td style="font-weight:700">GSI2</td><td class="pk">ZONA#&lt;barrio&gt;</td><td class="sk">&lt;fecha&gt;#&lt;rid&gt;</td><td>AP4: Reportes por barrio</td><td>Query sobre el slug del barrio</td></tr>
+      <tr><td style="font-weight:700">GSI3</td><td class="pk">CAT#&lt;cat&gt;#EST#&lt;estado&gt;</td><td class="sk">&lt;urgencia&gt;#&lt;fecha&gt;#&lt;rid&gt;</td><td>AP13: Panel de entidad</td><td>Reportes pendientes de "servicios", ordenados por urgencia</td></tr>
+      <tr><td style="font-weight:700">GSI4</td><td class="pk">FEED#&lt;fecha&gt; / MEDIA#&lt;fecha&gt;</td><td class="sk">&lt;fecha&gt;#&lt;id&gt;</td><td>AP20/AP23: Respaldo</td><td>Feed y videos desde DynamoDB si Redis cae</td></tr>
+    </tbody>
+  </table>
+
+  <h3>¿Por qué es Single Table?</h3>
+  <p>Todos los ítems de un reporte (META, EVT#, CONF#, MEDIA#) comparten la misma partición <code>PK=REP#&lt;id&gt;</code>. Un solo <code>Query</code> sobre esa PK trae el reporte completo: metadatos, historial, confirmaciones y medios adjuntos. Cero "JOIN", cero "Scan".</p>
+
+  <div class="flow-btns">
+    <button class="btn-next" onclick="highlightTableType('reporte')">Ver ítems de Reporte</button>
+    <button class="btn-next" style="background:var(--sierra)" onclick="highlightTableType('usuario')">Ver ítems de Usuario</button>
+    <button class="btn-next" style="background:var(--atardecer)" onclick="highlightTableType('media')">Ver ítems de Media</button>
+    <button class="btn-reset" onclick="highlightTableType('')">Limpiar</button>
+  </div>
+</div>
+
+<!-- ═══════════ 4. REDIS ═══════════ -->
+<div class="panel" id="p-redis">
+  <h2>Estructuras de Redis</h2>
+  <p class="subtitle">Redis NO es la fuente de verdad: todo lo que guarda se puede reconstruir desde DynamoDB. Si Redis no responde, la Lambda continúa en modo degradado.</p>
+
+  <div class="redis-structures">
+    <div class="redis-box">
+      <div class="rb-head">📋 feed:ciudad — Sorted Set</div>
+      <div class="rb-body">
+        <p style="font-size:.78rem;color:var(--mut);margin-bottom:8px">Score = timestamp de creación. ZREVRANGE para el feed.</p>
+        <div class="redis-entry"><span class="redis-key">REP#01JX...</span><span class="redis-score">1731580800</span></div>
+        <div class="redis-entry"><span class="redis-key">REP#01JW...</span><span class="redis-score">1731577200</span></div>
+        <div class="redis-entry"><span class="redis-key">REP#01JV...</span><span class="redis-score">1731573600</span></div>
+      </div>
+    </div>
+    <div class="redis-box">
+      <div class="rb-head">📍 geo:activos — Geo Index</div>
+      <div class="rb-body">
+        <p style="font-size:.78rem;color:var(--mut);margin-bottom:8px">GEOADD con coordenadas. GEOSEARCH para "reportes cerca de mí".</p>
+        <div class="redis-entry"><span class="redis-key">REP#01JX...</span><span class="redis-val">11.2050, -74.2270</span></div>
+        <div class="redis-entry"><span class="redis-key">REP#01JW...</span><span class="redis-val">11.1930, -74.2240</span></div>
+      </div>
+    </div>
+    <div class="redis-box">
+      <div class="rb-head">🏆 ranking:barrios:2026-W46 — Sorted Set</div>
+      <div class="rb-body">
+        <p style="font-size:.78rem;color:var(--mut);margin-bottom:8px">ZINCRBY +1 por cada reporte. ZREVRANGE top 10.</p>
+        <div class="redis-entry"><span class="redis-key">El Rodadero</span><span class="redis-score">12</span></div>
+        <div class="redis-entry"><span class="redis-key">Gaira</span><span class="redis-score">8</span></div>
+        <div class="redis-entry"><span class="redis-key">Centro Histórico</span><span class="redis-score">5</span></div>
+      </div>
+    </div>
+    <div class="redis-box">
+      <div class="rb-head">📄 rep:pub:&lt;id&gt; — String JSON (TTL 10 min)</div>
+      <div class="rb-body">
+        <p style="font-size:.78rem;color:var(--mut);margin-bottom:8px">Cache-Aside: el detalle público. Se invalida al cambiar de estado.</p>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:.75rem;color:var(--mut);white-space:pre-wrap">{"id":"01JX...","categoria":"vias",
+ "subtipo_nombre":"Calle inundada",
+ "barrio":"El Rodadero",
+ "estado":"pendiente",
+ "confirmaciones": 2, ...}</div>
+      </div>
+    </div>
+    <div class="redis-box">
+      <div class="rb-head">🎬 media:videos — Sorted Set</div>
+      <div class="rb-body">
+        <p style="font-size:.78rem;color:var(--mut);margin-bottom:8px">Write-Through al confirmar un video. Feed de /videos.</p>
+        <div class="redis-entry"><span class="redis-key">REP#01JX|MID#01JY</span><span class="redis-score">1731580800</span></div>
+      </div>
+    </div>
+    <div class="redis-box">
+      <div class="rb-head">🚦 rl:rep:&lt;uid&gt;:&lt;hora&gt; — Contador (TTL 1h)</div>
+      <div class="rb-body">
+        <p style="font-size:.78rem;color:var(--mut);margin-bottom:8px">Rate limiting: INCR + EXPIRE. Máx 5 reportes/hora por usuario.</p>
+        <div class="redis-entry"><span class="redis-key">rl:rep:USR01:2026111415</span><span class="redis-val">3</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ 5. FLUJO REGISTRO ═══════════ -->
+<div class="panel" id="p-flujo-registro">
+  <h2>Flujo Interactivo: Registro de Usuario</h2>
+  <p class="subtitle">Paso a paso: qué pasa en el código cuando alguien se registra. Pulsa "Siguiente paso" para avanzar.</p>
+
+  <div class="flow-container">
+    <div class="flow-left">
+      <div class="flow-nodes" id="regSteps"></div>
+      <div class="flow-btns">
+        <button class="btn-next" id="regNext" onclick="flowNext('reg')">▶ Siguiente paso</button>
+        <button class="btn-auto" id="regAuto" onclick="flowAuto('reg')">⏩ Automático</button>
+        <button class="btn-reset" onclick="flowReset('reg')">↺ Reiniciar</button>
+      </div>
+      <div class="log-box" id="regLog"></div>
+    </div>
+    <div class="flow-right">
+      <div class="code-panel"><div class="cp-header"><div class="dot" style="background:#ef4444"></div><div class="dot" style="background:#f59e0b"></div><div class="dot" style="background:#22c55e"></div><span id="regFile">usuarios.py</span></div><div class="cp-body" id="regCode"></div></div>
+      <div class="state-panel"><h4>Estado del sistema</h4><div class="state-grid" id="regState"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ 6. FLUJO REPORTE ═══════════ -->
+<div class="panel" id="p-flujo-reporte">
+  <h2>Flujo Interactivo: Crear Reporte</h2>
+  <p class="subtitle">El flujo más complejo: validaciones, rate limiting, DynamoDB + Write-Through a Redis, estadísticas.</p>
+
+  <div class="flow-container">
+    <div class="flow-left">
+      <div class="flow-nodes" id="repSteps"></div>
+      <div class="flow-btns">
+        <button class="btn-next" id="repNext" onclick="flowNext('rep')">▶ Siguiente paso</button>
+        <button class="btn-auto" id="repAuto" onclick="flowAuto('rep')">⏩ Automático</button>
+        <button class="btn-reset" onclick="flowReset('rep')">↺ Reiniciar</button>
+      </div>
+      <div class="log-box" id="repLog"></div>
+    </div>
+    <div class="flow-right">
+      <div class="code-panel"><div class="cp-header"><div class="dot" style="background:#ef4444"></div><div class="dot" style="background:#f59e0b"></div><div class="dot" style="background:#22c55e"></div><span id="repFile">reportes.py</span></div><div class="cp-body" id="repCode"></div></div>
+      <div class="state-panel"><h4>Estado del sistema</h4><div class="state-grid" id="repState"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ 7. FLUJO VIDEO ═══════════ -->
+<div class="panel" id="p-flujo-video">
+  <h2>Flujo Interactivo: Subir Video</h2>
+  <p class="subtitle">El archivo nunca pasa por la Lambda: URL prefirmada → subida directa a S3 → confirmación con HeadObject.</p>
+
+  <div class="flow-container">
+    <div class="flow-left">
+      <div class="flow-nodes" id="vidSteps"></div>
+      <div class="flow-btns">
+        <button class="btn-next" id="vidNext" onclick="flowNext('vid')">▶ Siguiente paso</button>
+        <button class="btn-auto" id="vidAuto" onclick="flowAuto('vid')">⏩ Automático</button>
+        <button class="btn-reset" onclick="flowReset('vid')">↺ Reiniciar</button>
+      </div>
+      <div class="log-box" id="vidLog"></div>
+    </div>
+    <div class="flow-right">
+      <div class="code-panel"><div class="cp-header"><div class="dot" style="background:#ef4444"></div><div class="dot" style="background:#f59e0b"></div><div class="dot" style="background:#22c55e"></div><span id="vidFile">reportes.py</span></div><div class="cp-body" id="vidCode"></div></div>
+      <div class="state-panel"><h4>Estado del sistema</h4><div class="state-grid" id="vidState"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ 8. FLUJO CONFIRMAR ═══════════ -->
+<div class="panel" id="p-flujo-confirmar">
+  <h2>Flujo Interactivo: Confirmación Vecinal</h2>
+  <p class="subtitle">TransactWriteItems garantiza: un voto por usuario + contador atómico. A las 3 confirmaciones cambia a "confirmado".</p>
+
+  <div class="flow-container">
+    <div class="flow-left">
+      <div class="flow-nodes" id="confSteps"></div>
+      <div class="flow-btns">
+        <button class="btn-next" id="confNext" onclick="flowNext('conf')">▶ Siguiente paso</button>
+        <button class="btn-auto" id="confAuto" onclick="flowAuto('conf')">⏩ Automático</button>
+        <button class="btn-reset" onclick="flowReset('conf')">↺ Reiniciar</button>
+      </div>
+      <div class="log-box" id="confLog"></div>
+    </div>
+    <div class="flow-right">
+      <div class="code-panel"><div class="cp-header"><div class="dot" style="background:#ef4444"></div><div class="dot" style="background:#f59e0b"></div><div class="dot" style="background:#22c55e"></div><span id="confFile">reportes.py</span></div><div class="cp-body" id="confCode"></div></div>
+      <div class="state-panel"><h4>Estado del sistema</h4><div class="state-grid" id="confState"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ 9. CACHE PATTERNS ═══════════ -->
+<div class="panel" id="p-cache">
+  <h2>Patrones de Caché</h2>
+  <p class="subtitle">Cinco patrones de caché diferentes, cada uno elegido por el caso de uso específico.</p>
+
+  <div class="pattern-cards">
+    <div class="pattern-card"><h4><span class="p-icon">📖</span> Cache-Aside (Lazy Loading)</h4><p><strong>Dónde:</strong> detalle de reporte (<code>rep:pub:{id}</code>), catálogo (<code>cfg:categorias</code>), noticias.<br><strong>Cómo:</strong> GET → ¿está en Redis? → Sí: devolver (CACHE HIT). No: Query DynamoDB → guardar en Redis con TTL → devolver (CACHE MISS).<br><strong>Por qué:</strong> Los datos de lectura cambian poco. Solo se cachean los que se piden.</p></div>
+    <div class="pattern-card"><h4><span class="p-icon">✍️</span> Write-Through</h4><p><strong>Dónde:</strong> crear reporte → feed, GEO, ranking, proyección pública. Confirmar video → <code>media:videos</code>.<br><strong>Cómo:</strong> POST → escribir en DynamoDB → escribir en Redis (pipeline: 7 comandos en una ida). El reporte aparece de inmediato en el feed.<br><strong>Por qué:</strong> Los datos nuevos deben ser visibles al instante.</p></div>
+    <div class="pattern-card"><h4><span class="p-icon">🗑️</span> Invalidación</h4><p><strong>Dónde:</strong> cambiar estado (resuelto), confirmar reporte, publicar noticia.<br><strong>Cómo:</strong> Borrar <code>rep:pub:{id}</code> y <code>rep:full:{id}</code>. La próxima lectura los reconstruye (Cache-Aside).<br><strong>Por qué:</strong> Evita carreras: actualizar una caché que otro proceso también actualiza produce datos inconsistentes.</p></div>
+    <div class="pattern-card"><h4><span class="p-icon">🚦</span> Rate Limiting</h4><p><strong>Dónde:</strong> crear reporte (5/hora por usuario), lecturas públicas (120/min por IP).<br><strong>Cómo:</strong> INCR + EXPIRE (nx=True) en un pipeline. Si Redis cae, se deja pasar (fail-open).<br><strong>Por qué:</strong> Protege contra abuso sin bloquear a usuarios legítimos si Redis falla.</p></div>
+    <div class="pattern-card"><h4><span class="p-icon">⏰</span> Limpieza Perezosa (Lazy Expiry)</h4><p><strong>Dónde:</strong> feed y GEO (reportes con vigencia limitada).<br><strong>Cómo:</strong> Sorted Set <code>expira:activos</code> con score = fin de vigencia. En cada lectura del feed: ZRANGEBYSCORE → retirar los vencidos.<br><strong>Por qué:</strong> Los miembros de un Sorted Set no expiran solos (no tienen TTL individual).</p></div>
+  </div>
+</div>
+
+<!-- ═══════════ 10. MODO DEGRADADO ═══════════ -->
+<div class="panel" id="p-degradado">
+  <h2>Modo Degradado — Redis Caído</h2>
+  <p class="subtitle">Si Redis no responde, NINGUNA operación falla. La Lambda continúa solo con DynamoDB (más lento, pero funcional).</p>
+
+  <h3>¿Qué pasa cuando Redis cae?</h3>
+  <div class="arch-grid">
+    <div class="arch-card" style="border-left:4px solid var(--ok)">
+      <div class="icon">📋</div>
+      <h4>Feed (AP1)</h4>
+      <p>Normalmente: <code>ZREVRANGE feed:ciudad</code> + MGET.<br>Degradado: Query GSI4 <code>FEED#&lt;fecha&gt;</code> de hoy y ayer, filtrar activos. Respuesta incluye <code>"_fuente": "dynamodb"</code>.</p>
+    </div>
+    <div class="arch-card" style="border-left:4px solid var(--ok)">
+      <div class="icon">📍</div>
+      <h4>Cercanía (AP2)</h4>
+      <p>Normalmente: <code>GEOSEARCH geo:activos</code>.<br>Degradado: Lee todos los activos desde GSI4, calcula Haversine en Python, ordena por distancia.</p>
+    </div>
+    <div class="arch-card" style="border-left:4px solid var(--ok)">
+      <div class="icon">📄</div>
+      <h4>Detalle (AP3)</h4>
+      <p>Normalmente: Cache-Aside con <code>rep:pub:{id}</code>.<br>Degradado: Query directo a DynamoDB <code>PK=REP#&lt;id&gt;</code>. Siempre funciona.</p>
+    </div>
+    <div class="arch-card" style="border-left:4px solid var(--ok)">
+      <div class="icon">✍️</div>
+      <h4>Crear reporte (AP9)</h4>
+      <p>DynamoDB se escribe siempre. El Write-Through a Redis falla silenciosamente (<code>logger.warning</code>). El reporte existe pero no aparece en el feed hasta que Redis vuelva.</p>
+    </div>
+    <div class="arch-card" style="border-left:4px solid var(--ok)">
+      <div class="icon">🚦</div>
+      <h4>Rate Limiting (AP18)</h4>
+      <p>Si Redis cae, <code>excede_limite()</code> devuelve False (fail-open). No se bloquea a nadie.</p>
+    </div>
+    <div class="arch-card" style="border-left:4px solid var(--ok)">
+      <div class="icon">🎬</div>
+      <h4>Videos (AP23)</h4>
+      <p>Normalmente: <code>ZREVRANGE media:videos</code>.<br>Degradado: Query GSI4 <code>MEDIA#&lt;fecha&gt;</code> de los últimos 7 días.</p>
+    </div>
+  </div>
+
+  <h3>El patrón en el código</h3>
+  <div class="code-panel"><div class="cp-header"><div class="dot" style="background:#ef4444"></div><div class="dot" style="background:#f59e0b"></div><div class="dot" style="background:#22c55e"></div><span>reportes.py — feed()</span></div><div class="cp-body">
+    <div class="code-line"><span class="kw">try</span>:</div>
+    <div class="code-line">    cache.limpiar_vencidos(db.epoch(db.ahora()))</div>
+    <div class="code-line">    reportes = _hidratar(cache.ids_feed(limite))  <span class="cm"># Redis ZREVRANGE + MGET</span></div>
+    <div class="code-line">    fuente = <span class="st">"cache"</span></div>
+    <div class="code-line"><span class="kw">except</span> redis.RedisError <span class="kw">as</span> e:</div>
+    <div class="code-line">    logger.warning(<span class="st">"Feed en modo degradado: %s"</span>, e)</div>
+    <div class="code-line">    reportes = _activos_desde_dynamo(<span class="num">200</span>)  <span class="cm"># GSI4 de respaldo</span></div>
+    <div class="code-line">    fuente = <span class="st">"dynamodb"</span></div>
+  </div></div>
+</div>
+
+<!-- ═══════════ 11. TESTS ═══════════ -->
+<div class="panel" id="p-tests">
+  <h2>Pruebas — 36 Tests</h2>
+  <p class="subtitle">pytest + moto (simula DynamoDB) + fakeredis (simula Redis). Sin emulador, sin Docker. Corren en ~7 segundos.</p>
+
+  <h3>Arquitectura de tests</h3>
+  <div class="arch-grid">
+    <div class="arch-card" style="border-left:4px solid var(--lambda-c)">
+      <h4>conftest.py — Fixtures</h4>
+      <p><code>@pytest.fixture tabla()</code>: moto <code>mock_aws()</code> crea tabla + bucket S3 en memoria.<br><code>@pytest.fixture redis_fake()</code>: fakeredis inyectado con <code>cache.usar_cliente()</code>.<br><code>@pytest.fixture redis_caido()</code>: <code>servidor.connected = False</code>.</p>
+    </div>
+    <div class="arch-card" style="border-left:4px solid var(--sierra)">
+      <h4>Helpers</h4>
+      <p><code>evento(metodo, recurso, ...)</code> → simula el event de API Gateway.<br><code>cuerpo(resp)</code> → parsea el body JSON de la respuesta.<br><code>crear_ciudadano()</code>, <code>crear_reporte()</code> → atajos para tests.</p>
+    </div>
+  </div>
+
+  <h3>Suites de tests (36 total)</h3>
+  <table class="dynamo-table">
+    <thead><tr><th>Archivo</th><th>Tests</th><th>Qué cubre</th></tr></thead>
+    <tbody>
+      <tr><td>test_reportes.py</td><td style="text-align:center">12</td><td>Crear, validar, rate limit, seguridad, cache-aside, feed, filtros, GEO, barrio, confirmaciones, categorías, ranking</td></tr>
+      <tr><td>test_usuarios.py</td><td style="text-align:center">5</td><td>Registro, correo duplicado, consentimiento Ley 1581, perfil, mis reportes</td></tr>
+      <tr><td>test_media.py</td><td style="text-align:center">5</td><td>Flujo video completo, confirmar sin subir, validaciones, videos sin Redis, noticias</td></tr>
+      <tr><td>test_entidad.py</td><td style="text-align:center">5</td><td>Pendientes, categorías, contacto, cambio de estado, estadísticas</td></tr>
+      <tr><td>test_degradado.py</td><td style="text-align:center">2</td><td>Feed sin Redis, cercanía sin Redis (Haversine)</td></tr>
+      <tr><td style="font-weight:700">test_flujo_completo.py</td><td style="text-align:center;font-weight:700">7</td><td style="font-weight:700">Registro → sesión → reporte → video → feed → confirmación vecinal → duplicados → consentimiento → privacidad → múltiples medios → acceso no autorizado</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Cómo funciona sin el emulador</h3>
+  <div class="code-panel"><div class="cp-header"><div class="dot" style="background:#ef4444"></div><div class="dot" style="background:#f59e0b"></div><div class="dot" style="background:#22c55e"></div><span>conftest.py</span></div><div class="cp-body">
+    <div class="code-line"><span class="kw">@pytest.fixture</span></div>
+    <div class="code-line"><span class="kw">def</span> <span class="fn">tabla</span>():</div>
+    <div class="code-line">    <span class="kw">with</span> mock_aws():          <span class="cm"># moto intercepta todas las llamadas a boto3</span></div>
+    <div class="code-line">        db.reiniciar()           <span class="cm"># limpia el cliente cacheado</span></div>
+    <div class="code-line">        media.reiniciar()</div>
+    <div class="code-line">        boto3.client(<span class="st">"s3"</span>).create_bucket(Bucket=<span class="st">"test-media"</span>)</div>
+    <div class="code-line">        t = _crear_tabla()       <span class="cm"># tabla con 4 GSI en memoria</span></div>
+    <div class="code-line">        <span class="kw">yield</span> t</div>
+    <div class="code-line"></div>
+    <div class="code-line"><span class="kw">@pytest.fixture</span></div>
+    <div class="code-line"><span class="kw">def</span> <span class="fn">redis_fake</span>(tabla):       <span class="cm"># depende de tabla → se crea primero</span></div>
+    <div class="code-line">    servidor = fakeredis.FakeServer()</div>
+    <div class="code-line">    cliente = fakeredis.FakeRedis(server=servidor)</div>
+    <div class="code-line">    cache.usar_cliente(cliente)  <span class="cm"># inyecta el fake en el módulo cache.py</span></div>
+    <div class="code-line">    <span class="kw">yield</span> cliente</div>
+  </div></div>
+</div>
+
+<script>
+// ── TAB NAVIGATION ────────────────────────────────────────────────
+document.querySelectorAll('#navTabs button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#navTabs button').forEach(b => b.classList.remove('on'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('on');
+    document.getElementById('p-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ── DOCKER STEPS ANIMATION ────────────────────────────────────────
+async function animateDockerSteps() {
+  const nodes = document.querySelectorAll('#dockerSteps .flow-node');
+  nodes.forEach(n => { n.classList.remove('done','active'); });
+  for (let i = 0; i < nodes.length; i++) {
+    nodes[i].classList.add('active');
+    nodes[i].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    await new Promise(r => setTimeout(r, 1200));
+    nodes[i].classList.remove('active');
+    nodes[i].classList.add('done');
+  }
+}
+
+// ── TABLE HIGHLIGHT ───────────────────────────────────────────────
+function highlightTableType(type) {
+  document.querySelectorAll('#stTable tbody tr').forEach(tr => {
+    tr.classList.toggle('hl-row', type && tr.dataset.type === type);
+  });
+}
+
+// ── FLOW ENGINE ───────────────────────────────────────────────────
+const FLOWS = {};
+const flowState = {};
+
+function defineFlow(id, steps, code, stateTemplate) {
+  FLOWS[id] = { steps, code, stateTemplate };
+  flowState[id] = { current: -1, auto: null };
+  renderFlowSteps(id);
+  renderFlowCode(id);
+  renderFlowState(id);
+}
+
+function renderFlowSteps(id) {
+  const el = document.getElementById(id + 'Steps');
+  el.innerHTML = FLOWS[id].steps.map((s, i) => `
+    <div class="flow-node" data-i="${i}">
+      <div class="step-num">${i + 1}</div>
+      <div class="step-text"><h5>${s.title}</h5><p>${s.desc}</p></div>
+    </div>`).join('');
+}
+
+function renderFlowCode(id) {
+  const el = document.getElementById(id + 'Code');
+  el.innerHTML = FLOWS[id].code.map((l, i) =>
+    `<div class="code-line" data-li="${i}">${l}</div>`).join('');
+}
+
+function renderFlowState(id) {
+  const el = document.getElementById(id + 'State');
+  const tpl = FLOWS[id].stateTemplate;
+  el.innerHTML = tpl.map(s => `
+    <div class="state-item"><div class="si-label">${s.label}</div><div class="si-val" id="${id}_s_${s.key}">${s.init}</div></div>`).join('');
+}
+
+function flowNext(id) {
+  const f = FLOWS[id], s = flowState[id];
+  if (s.current >= f.steps.length - 1) return;
+  s.current++;
+  const step = f.steps[s.current];
+
+  // Update nodes
+  document.querySelectorAll(`#${id}Steps .flow-node`).forEach((n, i) => {
+    n.classList.remove('active', 'done');
+    if (i < s.current) n.classList.add('done');
+    if (i === s.current) n.classList.add('active');
+  });
+
+  // Highlight code
+  document.querySelectorAll(`#${id}Code .code-line`).forEach(l => l.classList.remove('hl'));
+  if (step.codeLines) step.codeLines.forEach(i => {
+    const l = document.querySelector(`#${id}Code .code-line[data-li="${i}"]`);
+    if (l) l.classList.add('hl');
+  });
+
+  // Update file name
+  if (step.file) document.getElementById(id + 'File').textContent = step.file;
+
+  // Update state
+  if (step.state) {
+    Object.entries(step.state).forEach(([k, v]) => {
+      const el = document.getElementById(`${id}_s_${k}`);
+      if (el) { el.textContent = v; el.style.color = v === '❌' ? 'var(--bad)' : (v === '✅' ? 'var(--ok)' : ''); }
+    });
+  }
+
+  // Log
+  if (step.log) {
+    const logEl = document.getElementById(id + 'Log');
+    const entry = document.createElement('div');
+    entry.className = 'log-entry';
+    entry.innerHTML = `<span class="log-tag ${step.logClass || ''}">${step.logTag || 'Info'}</span><span>${step.log}</span>`;
+    logEl.prepend(entry);
+  }
+
+  // Disable next if done
+  document.getElementById(id + 'Next').disabled = s.current >= f.steps.length - 1;
+}
+
+async function flowAuto(id) {
+  const f = FLOWS[id], s = flowState[id];
+  document.getElementById(id + 'Auto').disabled = true;
+  while (s.current < f.steps.length - 1) {
+    flowNext(id);
+    await new Promise(r => setTimeout(r, 1800));
+  }
+  document.getElementById(id + 'Auto').disabled = false;
+}
+
+function flowReset(id) {
+  flowState[id].current = -1;
+  renderFlowSteps(id);
+  renderFlowCode(id);
+  renderFlowState(id);
+  document.getElementById(id + 'Log').innerHTML = '';
+  document.getElementById(id + 'Next').disabled = false;
+  document.querySelectorAll(`#${id}Code .code-line`).forEach(l => l.classList.remove('hl'));
+}
+
+// ── DEFINE: REGISTRO ──────────────────────────────────────────────
+defineFlow('reg', [
+  { title: 'POST /usuarios llega al API Gateway', desc: 'El navegador envía nombre, email, teléfono, barrio y acepta_politica.', codeLines: [0,1], file: 'usuarios.py',
+    log: '→ POST /usuarios con body: {nombre: "María García", email: "maria@correo.com", ...}', logTag: 'API GW', logClass: 't-api',
+    state: { dynamo: '—', email: '—', resp: '⏳' } },
+  { title: 'Validar campos obligatorios', desc: 'Nombre ≥ 3 chars, email válido, acepta_politica = true (Ley 1581).', codeLines: [3,4,5,6],
+    log: '✓ Campos válidos: nombre="María García", email="maria@correo.com", acepta_politica=true', logTag: 'Lambda', logClass: 't-lambda',
+    state: { resp: '⏳ Validando...' } },
+  { title: 'Generar ULID', desc: 'Identificador único: 48 bits de tiempo + 80 bits aleatorios. Ordenable por fecha.', codeLines: [8,9],
+    log: '🆔 ULID generado: 01JXAK7M... (base32 Crockford)', logTag: 'Lambda', logClass: 't-lambda',
+    state: { resp: '⏳ Generando ID...' } },
+  { title: 'TransactWriteItems — correo único', desc: 'Transacción atómica: Put del perfil (USR#id/PERFIL) + Put del candado (EMAIL#correo/USUARIO). Si el email ya existe, NADA se escribe.', codeLines: [11,12,13,14,15,16,17,18],
+    log: '💾 TransactWriteItems: Put USR#01JXAK7M/PERFIL + Put EMAIL#maria@correo.com/USUARIO (con ConditionExpression: attribute_not_exists(PK))', logTag: 'DynamoDB', logClass: 't-dynamo',
+    state: { dynamo: '2 ítems', email: '✅ Único', resp: '⏳ Escribiendo...' } },
+  { title: 'Respuesta 201 Created', desc: 'Se devuelve el perfil con id, nombre, email, rol="ciudadano" y confianza=0.5.', codeLines: [19],
+    log: '✅ 201 Created — {id: "01JXAK7M...", nombre: "María García", rol: "ciudadano"}', logTag: 'OK', logClass: 't-ok',
+    state: { resp: '✅ 201' } },
+], [
+  '<span class="cm"># POST /usuarios → registrar()</span>',
+  '<span class="kw">def</span> <span class="fn">registrar</span>(event):',
+  '    datos = cuerpo_json(event)',
+  '',
+  '    <span class="cm"># Validaciones</span>',
+  '    <span class="kw">if</span> len(nombre) < <span class="num">3</span>: <span class="kw">raise</span> ErrorApi(<span class="num">400</span>)',
+  '    <span class="kw">if</span> <span class="kw">not</span> acepta_politica: <span class="kw">raise</span> ErrorApi(<span class="num">400</span>, <span class="st">"Ley 1581"</span>)',
+  '',
+  '    <span class="cm"># Generar identificador</span>',
+  '    uid = db.ulid()  <span class="cm"># 48 bits tiempo + 80 bits random</span>',
+  '',
+  '    <span class="cm"># Transacción: perfil + candado de correo</span>',
+  '    db.cliente().transact_write_items(TransactItems=[',
+  '        {<span class="st">"Put"</span>: {  <span class="cm"># Perfil del usuario</span>',
+  '            Item: {PK: <span class="st">"USR#id"</span>, SK: <span class="st">"PERFIL"</span>, ...},',
+  '            ConditionExpression: <span class="st">"attribute_not_exists(PK)"</span>}},',
+  '        {<span class="st">"Put"</span>: {  <span class="cm"># Candado de correo único</span>',
+  '            Item: {PK: <span class="st">"EMAIL#correo"</span>, SK: <span class="st">"USUARIO"</span>},',
+  '            ConditionExpression: <span class="st">"attribute_not_exists(PK)"</span>}},',
+  '    <span class="kw">return</span> respuesta(<span class="num">201</span>, perfil)',
+], [
+  { label: 'DynamoDB', key: 'dynamo', init: '—' },
+  { label: 'Email único', key: 'email', init: '—' },
+  { label: 'Respuesta', key: 'resp', init: '—' },
+]);
+
+// ── DEFINE: REPORTE ───────────────────────────────────────────────
+defineFlow('rep', [
+  { title: 'POST /reportes llega al API Gateway', desc: 'Ciudadano envía categoría, subtipo, lat/lng, barrio, descripción.', codeLines: [0,1], file: 'reportes.py',
+    log: '→ POST /reportes — categoría=vias, subtipo=calle_inundada, lat=11.2050', logTag: 'API GW', logClass: 't-api',
+    state: { rate: '—', dynamo: '—', redis: '—', resp: '⏳' } },
+  { title: 'Rate limiting (Redis INCR + EXPIRE)', desc: 'Máx 5 reportes/hora por usuario. Pipeline: INCR + EXPIRE (nx=True). Si Redis cae, se deja pasar.', codeLines: [3,4,5],
+    log: '🚦 INCR rl:rep:USR01:2026111415 → 1 (límite: 5/hora)', logTag: 'Redis', logClass: 't-redis',
+    state: { rate: '1/5 ✅' } },
+  { title: 'Validar categoría y subtipo', desc: 'Busca en el catálogo (CONFIG/CATEGORIAS). Verifica que la ubicación está dentro de Santa Marta.', codeLines: [7,8,9],
+    log: '✓ Categoría "vias" → subtipo "calle_inundada" válido. Urgencia: 3, horas activas: 12', logTag: 'Lambda', logClass: 't-lambda',
+    state: { resp: '⏳ Validando...' } },
+  { title: 'Calcular privacidad y confianza', desc: 'Si es "seguridad": ubicación aproximada (~150m), sin dirección. Confianza: ¿el reportante estaba cerca? (Haversine)', codeLines: [11,12,13,14],
+    log: '📍 Distancia reportante ↔ incidente: 0.01 km → confianza "normal". Ubicación exacta (no es seguridad).', logTag: 'Lambda', logClass: 't-lambda' },
+  { title: 'DynamoDB: reporte + evento + estadísticas', desc: 'BatchWriter: META + EVT#fecha#pendiente. Luego update_item en STAT#DIA y STAT#ZONA (contadores atómicos ADD).', codeLines: [16,17,18,19,20,21],
+    log: '💾 BatchWriter → Put REP#01JX/META + Put REP#01JX/EVT#2026-11-14#pendiente. UpdateItem STAT#DIA + STAT#ZONA.', logTag: 'DynamoDB', logClass: 't-dynamo',
+    state: { dynamo: '3 ítems + 2 stats' } },
+  { title: 'Write-Through: pipeline de 7 comandos', desc: 'ZADD feed + GEOADD + ZADD expira + ZINCRBY ranking + SET proyección + SET confirmaciones. Todo en UNA ida a Redis.', codeLines: [23,24,25,26,27,28,29,30],
+    log: '⚡ Pipeline Redis: ZADD feed:ciudad + GEOADD geo:activos + ZADD expira:activos + ZINCRBY ranking:barrios:2026-W46 + SET rep:pub:01JX + SET conf:01JX', logTag: 'Redis', logClass: 't-redis',
+    state: { redis: '7 cmds ✅' } },
+  { title: 'Respuesta 201 Created', desc: 'Devuelve el reporte con su id. Si la categoría tiene aviso_123: "Si hay riesgo para la vida, llama al 123".', codeLines: [32],
+    log: '✅ 201 Created — {id: "01JX...", estado: "pendiente", barrio: "El Rodadero"}', logTag: 'OK', logClass: 't-ok',
+    state: { resp: '✅ 201' } },
+], [
+  '<span class="cm"># POST /reportes → crear()</span>',
+  '<span class="kw">def</span> <span class="fn">crear</span>(event):',
+  '    usuario = usuario_actual(event)  <span class="cm"># verifica X-Usuario-Id</span>',
+  '    <span class="cm"># Rate limiting</span>',
+  '    <span class="kw">if</span> cache.excede_limite(clave, <span class="num">5</span>, <span class="num">3600</span>):',
+  '        <span class="kw">raise</span> ErrorApi(<span class="num">429</span>, <span class="st">"Máx 5/hora"</span>)',
+  '',
+  '    <span class="cm"># Validaciones</span>',
+  '    cat, sub = catalogo.buscar(categoria, subtipo)',
+  '    <span class="kw">if not</span> modelo.dentro_de_santa_marta(lat, lng): ...',
+  '',
+  '    <span class="cm"># Privacidad por niveles</span>',
+  '    <span class="kw">if</span> cat[<span class="st">"ubicacion_aproximada"</span>]:',
+  '        lat_pub = modelo.aproximar(lat)  <span class="cm"># ≈ 150 m</span>',
+  '    confianza = <span class="st">"baja"</span> <span class="kw">if</span> distancia > <span class="num">20</span> <span class="kw">else</span> <span class="st">"normal"</span>',
+  '',
+  '    <span class="cm"># 1. DynamoDB (fuente de verdad)</span>',
+  '    <span class="kw">with</span> db.tabla().batch_writer() <span class="kw">as</span> lote:',
+  '        lote.put_item(Item=item)            <span class="cm"># REP#id / META</span>',
+  '        lote.put_item(Item=evento_creacion)  <span class="cm"># REP#id / EVT#fecha</span>',
+  '    db.registrar_estadistica(...)            <span class="cm"># STAT#DIA + STAT#ZONA</span>',
+  '    db.registrar_estadistica(...)  <span class="cm"># contadores atómicos ADD</span>',
+  '',
+  '    <span class="cm"># 2. Write-Through a Redis (1 pipeline, 7 comandos)</span>',
+  '    pipe = cache.cliente().pipeline()',
+  '    pipe.zadd(FEED, {rid: ts})        <span class="cm"># feed:ciudad</span>',
+  '    pipe.geoadd(GEO, (lng, lat, rid)) <span class="cm"># geo:activos</span>',
+  '    pipe.zadd(EXPIRA, {rid: exp_ts})  <span class="cm"># expira:activos</span>',
+  '    pipe.zincrby(semana, <span class="num">1</span>, barrio)  <span class="cm"># ranking semanal</span>',
+  '    pipe.set(k_pub(rid), json, ex=<span class="num">600</span>) <span class="cm"># proyección pública</span>',
+  '    pipe.set(k_conf(rid), <span class="num">0</span>)          <span class="cm"># contador confirmaciones</span>',
+  '    pipe.execute()',
+  '',
+  '    <span class="kw">return</span> respuesta(<span class="num">201</span>, reporte)',
+], [
+  { label: 'Rate Limit', key: 'rate', init: '—' },
+  { label: 'DynamoDB', key: 'dynamo', init: '—' },
+  { label: 'Redis', key: 'redis', init: '—' },
+  { label: 'Respuesta', key: 'resp', init: '—' },
+]);
+
+// ── DEFINE: VIDEO ─────────────────────────────────────────────────
+defineFlow('vid', [
+  { title: 'POST /reportes/{id}/media', desc: 'El autor pide una URL para subir un video MP4 de 5 MB.', codeLines: [0,1,2], file: 'reportes.py → pedir_subida()',
+    log: '→ POST /reportes/01JX/media — content_type=video/mp4, tamano=5000000', logTag: 'API GW', logClass: 't-api',
+    state: { s3: '—', dynamo: '—', redis: '—', resp: '⏳' } },
+  { title: 'Validar: solo el autor, formato, tamaño, no seguridad', desc: 'Verifica que el usuario es el autor, el formato está en TIPOS, el tamaño < 50MB, y que no es categoría "seguridad".', codeLines: [4,5,6,7],
+    log: '✓ Autor verificado. video/mp4 ≤ 50MB. No es seguridad. Máximo 4 archivos por reporte.', logTag: 'Lambda', logClass: 't-lambda' },
+  { title: 'Crear ítem MEDIA# + generar URL prefirmada', desc: 'Put MEDIA#mid con estado="subiendo". generate_presigned_url con el endpoint público de S3.', codeLines: [9,10,11,12,13],
+    log: '💾 Put REP#01JX/MEDIA#01JY — estado="subiendo". URL prefirmada: http://localhost:4566/.../01JY.mp4 (15 min)', logTag: 'DynamoDB', logClass: 't-dynamo',
+    state: { dynamo: 'MEDIA# creado', resp: '⏳' } },
+  { title: '201 — URL devuelta al navegador', desc: 'El frontend recibe: metodo=PUT, url_subida, headers={Content-Type: video/mp4}, expira_en_seg=900.', codeLines: [14],
+    log: '✅ 201 — {id: "01JY", metodo: "PUT", url_subida: "http://localhost:4566/...", expira_en_seg: 900}', logTag: 'OK', logClass: 't-ok',
+    state: { resp: '✅ 201 (URL)' } },
+  { title: '🌐 El navegador sube directo a S3', desc: 'fetch(url_subida, {method: "PUT", body: archivo}). La Lambda NO toca el archivo. El archivo va directo del navegador al bucket.', codeLines: [],
+    log: '📦 PUT http://localhost:4566/test-media/reportes/01JX/01JY.mp4 — 5 MB directo al bucket', logTag: 'S3', logClass: 't-s3',
+    state: { s3: '5 MB ✅' } },
+  { title: 'POST .../media/{mid}/confirmar', desc: 'El frontend avisa que terminó de subir. La Lambda verifica con HeadObject que el archivo realmente está en S3.', codeLines: [16,17,18,19],
+    log: '🔍 HeadObject s3://test-media/reportes/01JX/01JY.mp4 → ContentLength: 5000000 ✅', logTag: 'S3', logClass: 't-s3' },
+  { title: 'Actualizar MEDIA# + META + Write-Through', desc: 'UpdateItem: estado→"listo", GSI4PK=MEDIA#fecha. UpdateItem META: media_count +1, tiene_video=true. Pipeline Redis: ZADD media:videos + SET media:mid.', codeLines: [21,22,23,24,25,26],
+    log: '💾 MEDIA#01JY → estado="listo". META: media_count=1, tiene_video=true. Redis: ZADD media:videos + SET media:01JY', logTag: 'DynamoDB+Redis', logClass: 't-dynamo',
+    state: { dynamo: 'MEDIA# listo', redis: 'video en feed ✅', resp: '✅ 200' } },
+], [
+  '<span class="cm"># POST /reportes/{id}/media → pedir_subida()</span>',
+  '<span class="kw">def</span> <span class="fn">pedir_subida</span>(event):',
+  '    _, meta = _reporte_propio(event)  <span class="cm"># verifica que es el autor</span>',
+  '',
+  '    <span class="cm"># Validar formato, tamaño, privacidad</span>',
+  '    clase, ext = media.TIPOS[content_type]  <span class="cm"># video/mp4 → ("video","mp4")</span>',
+  '    <span class="kw">if</span> tamano > LIMITE_BYTES[clase]: <span class="kw">raise</span> ErrorApi(<span class="num">400</span>)',
+  '    <span class="kw">if</span> meta[<span class="st">"categoria"</span>] == <span class="st">"seguridad"</span>: <span class="kw">raise</span> ErrorApi(<span class="num">400</span>)',
+  '',
+  '    <span class="cm"># Crear ítem + URL prefirmada</span>',
+  '    mid = db.ulid()',
+  '    clave = <span class="st">f"reportes/{rid}/{mid}.{ext}"</span>',
+  '    db.tabla().put_item(Item={PK, SK: <span class="st">f"MEDIA#{mid}"</span>, estado: <span class="st">"subiendo"</span>})',
+  '    url = media.url_subida(clave, content_type)  <span class="cm"># 15 min</span>',
+  '    <span class="kw">return</span> respuesta(<span class="num">201</span>, {url_subida, ...})',
+  '',
+  '<span class="cm"># POST .../media/{mid}/confirmar → confirmar_subida()</span>',
+  '<span class="kw">def</span> <span class="fn">confirmar_subida</span>(event):',
+  '    tamano = media.tamano_subido(clave)  <span class="cm"># HeadObject en S3</span>',
+  '    <span class="kw">if</span> tamano <span class="kw">is None</span>: <span class="kw">raise</span> ErrorApi(<span class="num">409</span>, <span class="st">"No está en S3"</span>)',
+  '',
+  '    <span class="cm"># Actualizar MEDIA# y META</span>',
+  '    db.tabla().update_item(Key={PK,SK}, SET estado=<span class="st">"listo"</span>, GSI4PK=...)',
+  '    db.tabla().update_item(Key={PK,<span class="st">"META"</span>}, ADD media_count <span class="num">1</span>)',
+  '',
+  '    <span class="cm"># Write-Through al feed de videos</span>',
+  '    pipe.zadd(<span class="st">"media:videos"</span>, {<span class="st">f"{rid}|{mid}"</span>: ts})',
+  '    pipe.set(<span class="st">f"media:{mid}"</span>, json, ex=<span class="num">3600</span>)',
+], [
+  { label: 'S3', key: 's3', init: '—' },
+  { label: 'DynamoDB', key: 'dynamo', init: '—' },
+  { label: 'Redis', key: 'redis', init: '—' },
+  { label: 'Respuesta', key: 'resp', init: '—' },
+]);
+
+// ── DEFINE: CONFIRMACIÓN ──────────────────────────────────────────
+defineFlow('conf', [
+  { title: 'POST /reportes/{id}/confirmaciones', desc: 'Un vecino confirma que el reporte es real. Header X-Usuario-Id identifica al vecino.', codeLines: [0,1,2], file: 'reportes.py → confirmar()',
+    log: '→ POST /reportes/01JX/confirmaciones — vecino USR#02', logTag: 'API GW', logClass: 't-api',
+    state: { conf: '0', estado: 'pendiente', ttl: '48h', resp: '⏳' } },
+  { title: 'Verificar: no es el autor, estado activo', desc: 'El autor no puede confirmar su propio reporte. Solo estados activos (pendiente, confirmado, en_atencion).', codeLines: [4,5,6],
+    log: '✓ Vecino USR#02 ≠ autor USR#01. Estado "pendiente" es activo.', logTag: 'Lambda', logClass: 't-lambda' },
+  { title: 'TransactWriteItems: voto + contador', desc: 'Put condicional CONF#usuario (un voto por persona). UpdateItem META: ADD confirmaciones 1 + REMOVE ttl (ya no se borra a las 48h).', codeLines: [8,9,10,11,12,13,14,15,16,17],
+    log: '💾 TransactWriteItems: Put REP#01JX/CONF#USR02 (attribute_not_exists) + Update META: ADD confirmaciones 1, REMOVE ttl', logTag: 'DynamoDB', logClass: 't-dynamo',
+    state: { conf: '1', ttl: '❌ removido' } },
+  { title: 'Leer contador oficial', desc: 'GetItem del META para obtener el valor actualizado del contador.', codeLines: [19],
+    log: '📖 GetItem REP#01JX/META → confirmaciones: 1', logTag: 'DynamoDB', logClass: 't-dynamo' },
+  { title: '(Repetir) Vecino #2 y #3 confirman', desc: 'Misma transacción para cada vecino. Al llegar a 3 confirmaciones...', codeLines: [19,20],
+    log: '💾 Vecino #2 confirma → 2. Vecino #3 confirma → 3. ¡Se alcanzó el umbral!', logTag: 'DynamoDB', logClass: 't-dynamo',
+    state: { conf: '3' } },
+  { title: '3 confirmaciones → cambio automático de estado', desc: 'estados.cambiar_estado(): TransactWriteItems: Update META estado→"confirmado" + Put EVT#fecha#confirmado. Condición: estado="pendiente".', codeLines: [22,23,24,25],
+    log: '🔄 cambiar_estado("confirmado"): TransactWriteItems → Update META + Put EVT#confirmado. Cache invalidada (rep:pub, rep:full).', logTag: 'DynamoDB', logClass: 't-dynamo',
+    state: { estado: 'confirmado ✅' } },
+  { title: 'Actualizar Redis + Respuesta', desc: 'SET conf:{id} con el conteo oficial. Borrar caché de detalle. Respuesta 201.', codeLines: [27,28,29],
+    log: '✅ 201 — {id: "01JX", confirmaciones: 3, estado: "confirmado"}', logTag: 'OK', logClass: 't-ok',
+    state: { resp: '✅ 201' } },
+], [
+  '<span class="cm"># POST /reportes/{id}/confirmaciones → confirmar()</span>',
+  '<span class="kw">def</span> <span class="fn">confirmar</span>(event):',
+  '    usuario = usuario_actual(event)',
+  '',
+  '    <span class="cm"># Validaciones</span>',
+  '    <span class="kw">if</span> meta[<span class="st">"autor_id"</span>] == usuario[<span class="st">"id"</span>]:',
+  '        <span class="kw">raise</span> ErrorApi(<span class="num">400</span>, <span class="st">"No puedes confirmar tu propio reporte"</span>)',
+  '',
+  '    <span class="cm"># Transacción: un voto por usuario + contador atómico</span>',
+  '    db.cliente().transact_write_items(TransactItems=[',
+  '        {<span class="st">"Put"</span>: {  <span class="cm"># CONF#usuario — un voto por persona</span>',
+  '            Item: {PK: <span class="st">"REP#id"</span>, SK: <span class="st">"CONF#usuario"</span>},',
+  '            ConditionExpression: <span class="st">"attribute_not_exists(PK)"</span>}},',
+  '        {<span class="st">"Update"</span>: {  <span class="cm"># contador + quitar TTL</span>',
+  '            Key: {PK: <span class="st">"REP#id"</span>, SK: <span class="st">"META"</span>},',
+  '            UpdateExpression: <span class="st">"ADD confirmaciones :uno REMOVE ttl"</span>}},',
+  '    ])',
+  '',
+  '',
+  '    total = db.obtener_reporte(rid)[<span class="st">"confirmaciones"</span>]',
+  '    <span class="kw">if</span> total >= CONFIRMACIONES_REQUERIDAS:  <span class="cm"># default: 3</span>',
+  '',
+  '        <span class="cm"># Cambio automático de estado</span>',
+  '        estados.cambiar_estado(meta, <span class="st">"confirmado"</span>, <span class="st">"sistema"</span>)',
+  '        <span class="cm"># → TransactWriteItems: Update META + Put EVT#</span>',
+  '        <span class="cm"># → cache.borrar(rep:pub, rep:full)</span>',
+  '',
+  '    <span class="cm"># Actualizar Redis</span>',
+  '    cache.cliente().set(k_conf(rid), total, keepttl=<span class="kw">True</span>)',
+  '    <span class="kw">return</span> respuesta(<span class="num">201</span>, {confirmaciones: total, estado})',
+], [
+  { label: 'Confirmaciones', key: 'conf', init: '0' },
+  { label: 'Estado', key: 'estado', init: 'pendiente' },
+  { label: 'TTL (auto-borrado)', key: 'ttl', init: '48h' },
+  { label: 'Respuesta', key: 'resp', init: '—' },
+]);
+</script>
+</body>
+</html>
